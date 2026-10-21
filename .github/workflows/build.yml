@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 20
     defaults:
       run:
-        # The verification scripts load .NET Framework assemblies.
+        # 验证脚本需要加载 .NET Framework 程序集，因此使用 Windows PowerShell。
         shell: powershell
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
@@ -31,14 +31,17 @@ jobs:
         with:
           dotnet-version: '10.0.301'
 
+      - name: Build solution without a prebuilt payload
+        run: dotnet build ./PCL.DownloadRestore.sln --configuration Debug --nologo
+
       - name: Build injector and verify embedded payload
         run: ./scripts/Build-Injector.ps1 -Configuration Release
 
       - name: Package injector and source
         run: ./scripts/Package-Injector.ps1
 
-      # The official PCL executable is not redistributed in this repository.
-      # Host-dependent installation, runtime, and GUI tests run separately.
+      # 仓库不分发官方 PCL 可执行文件。
+      # 依赖官方宿主的安装、运行时及界面测试另行执行。
       - name: Report validation scope
         run: |
           @'
@@ -50,7 +53,7 @@ jobs:
       - name: Upload injector ZIP
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          path: artifacts/PCL.DownloadRestore.Injector-2.99.0.0.zip
+          path: artifacts/PCL.DownloadRestore.Injector.zip
           archive: false
           if-no-files-found: error
           retention-days: 30

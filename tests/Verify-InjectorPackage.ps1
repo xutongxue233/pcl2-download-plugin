@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string] $PackagePath,
     [string] $SourcePackagePath,
@@ -7,7 +7,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-if (-not $PackagePath) { $PackagePath = Join-Path $projectRoot 'artifacts\PCL.DownloadRestore.Injector-2.99.0.0.zip' }
+if (-not $PackagePath) { $PackagePath = Join-Path $projectRoot 'artifacts\PCL.DownloadRestore.Injector.zip' }
 if (-not $SourcePackagePath) { $SourcePackagePath = Join-Path $projectRoot 'artifacts\PCL.DownloadRestore.Injector-Source.zip' }
 if (-not $HostExecutable) { $HostExecutable = Join-Path $projectRoot 'refs\Plain Craft Launcher 2.exe' }
 if (-not $OutputDirectory) { $OutputDirectory = Join-Path $projectRoot 'artifacts\injector-package-verification' }
@@ -174,7 +174,7 @@ try {
             $_ -match '(?i)(^|/)(artifacts|refs|references|\.tools|\.git|bin|obj|test-results|payload|packages|\.packages|deps|\.analysis|PCL-2\.[^/]*)(/|$)'
         })
         Assert-Condition ($forbidden.Count -eq 0) 'Source ZIP excludes official host binaries, dependencies and generated build/test artifacts'
-        foreach ($required in @('src/Injector/PCL.DownloadRestore.Injector.csproj', 'src/Injector/app.manifest', 'src/Injector/Program.cs', 'src/Injector/MainWindow.xaml', 'src/Injector/MainWindow.xaml.cs', 'src/Injector/UI/PclStyles.xaml', 'src/Injector/UI/Resources/Font.ttf', 'src/Injector/UI/SOURCE-NOTES.md', 'src/Injector/Installation/InstallationService.cs', 'src/Bootstrap/PluginDomainManager.cs', 'src/DownloadRestore/EntryPoint.cs', 'scripts/Build-Injector.ps1', 'scripts/Package-Injector.ps1', 'tests/Verify-InjectorPackage.ps1')) {
+        foreach ($required in @('src/Injector/PCL.DownloadRestore.Injector.csproj', 'src/Injector/app.manifest', 'src/Injector/Program.cs', 'src/Injector/MainWindow.xaml', 'src/Injector/MainWindow.xaml.cs', 'src/Injector/UI/PclStyles.xaml', 'src/Injector/UI/SOURCE-NOTES.md', 'src/Injector/Installation/InstallationService.cs', 'src/Bootstrap/PluginDomainManager.cs', 'src/DownloadRestore/EntryPoint.cs', 'scripts/Build-Injector.ps1', 'scripts/Package-Injector.ps1', 'tests/Verify-InjectorPackage.ps1')) {
             Assert-Condition ($files.ContainsKey($required)) "Source ZIP includes $required"
         }
         $summary.SourceFileCount = $files.Count

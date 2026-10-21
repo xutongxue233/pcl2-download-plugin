@@ -16,4 +16,4 @@
 
 ## 构建依赖
 
-.NET SDK 与 `Microsoft.NETFramework.ReferenceAssemblies` 仅用于构建。Windows 系统字体由系统提供；仓库不会分发微软雅黑或 Segoe UI 字体文件。保留的 PCL 原字体资源附带 PCL 来源声明。
+.NET SDK 与 `Microsoft.NETFramework.ReferenceAssemblies` 仅用于构建。界面使用 Windows 系统提供的字体，仓库不再携带未使用的 PCL English 字体，也不分发微软雅黑、Segoe UI 或 Consolas 字体文件。

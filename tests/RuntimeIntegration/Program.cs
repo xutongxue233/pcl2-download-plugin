@@ -14,6 +14,8 @@ internal static class Program
 {
     private const BindingFlags All = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
     private const string TestPatchId = "pcl.downloadrestore.tests.runtime";
+    // 此哈希仅用于确认回归测试样本，生产插件不使用宿主哈希白名单。
+    private const string OfficialFixtureSha256 = "6B6E1260CB5A1D6A303855F1C60CAB3D0BC1AEBBA7E40A964180188B271E7386";
     private static readonly List<string> Passed = new List<string>();
     private static readonly List<string> Log = new List<string>();
     private static Assembly host;
@@ -34,6 +36,7 @@ internal static class Program
         {
             string hostPath = Path.GetFullPath(args[0]);
             string hashBefore = Hash(hostPath);
+            Assert(hashBefore == OfficialFixtureSha256, "Official regression fixture has the expected SHA-256");
             fixtures = Path.Combine(Path.GetDirectoryName(report), "fixtures");
             gameFolder = Path.Combine(fixtures, "minecraft") + "\\";
             Directory.CreateDirectory(fixtures);
@@ -45,6 +48,7 @@ internal static class Program
             Assert(timingRejected && !EntryPoint.IsInitialized, "Premature initialization rejected before host static types are patched");
             Assembly.Load("MeloongCore").GetType("MeloongCore.Main", true).GetMethod("Init").Invoke(null, new object[] { "PCL" });
             Assembly.Load("MeloongCore.Wpf").GetType("MeloongCore.Wpf.Main", true).GetMethod("Init").Invoke(null, new object[0]);
+            TestHostIdentityAndStructureChecks();
             var sabotage = new Harmony(TestPatchId + ".atomic");
             var thirdTranspiler = typeof(EntryPoint).Assembly.GetType("PCL.DownloadRestore.RuntimePatches", true).GetMethod("RestoreResourceActions", All);
             sabotage.Patch(thirdTranspiler, prefix: new HarmonyMethod(typeof(Program), nameof(FailThirdPatch)));
@@ -144,7 +148,7 @@ internal static class Program
             Invoke(choose);
             Assert(capturedMethod == "InstallPackCurseForge" && dispatchedThreads == 1 && (string)capturedArgs[0] == valid, "Manual file chooser schedules preserved host closure and dispatches selected file");
             AssertDisposed(capturedArgs[1] as ZipArchive, "Manual import disposes archive");
-            Assert(Hash(hostPath) == hashBefore && hashBefore == EntryPoint.SupportedHostSha256, "Official EXE remains byte-identical after all runtime tests");
+            Assert(Hash(hostPath) == hashBefore && hashBefore == OfficialFixtureSha256, "Official EXE remains byte-identical after all runtime tests");
             mocks.UnpatchAll(TestPatchId);
             File.WriteAllLines(report, Passed.Select(item => "PASS " + item).Concat(new[] { "", "Passed: " + Passed.Count, "", "Plugin log:" }).Concat(Log));
             Console.WriteLine("Runtime integration passed: " + Passed.Count + " assertions. " + report);
@@ -157,6 +161,28 @@ internal static class Program
             Console.Error.WriteLine(exception);
             return 1;
         }
+    }
+
+    private static void TestHostIdentityAndStructureChecks()
+    {
+        // 动态程序集没有可供读取的 EXE 文件，用于确认入口不再依赖固定哈希或版本。
+        var changedHost = AppDomain.CurrentDomain.DefineDynamicAssembly(
+            new AssemblyName("Plain Craft Launcher 2") { Version = new Version(9, 1, 2, 3) }, AssemblyBuilderAccess.Run);
+        typeof(EntryPoint).GetMethod("ValidateHost", All).Invoke(null, new object[] { changedHost });
+        Assert(true, "PCL identity validation accepts a different version without reading an EXE hash");
+
+        bool nameRejected = false;
+        try { EntryPoint.Initialize(typeof(Program).Assembly, message => Log.Add(message)); }
+        catch (NotSupportedException) { nameRejected = true; }
+        Assert(nameRejected && !EntryPoint.IsInitialized, "An unrelated assembly name is rejected before patching");
+
+        bool structureRejected = false;
+        try { EntryPoint.Initialize(changedHost, message => Log.Add(message)); }
+        catch (TypeLoadException) { structureRejected = true; }
+        Assert(structureRejected && !EntryPoint.IsInitialized && EntryPoint.PatchedMethods.Count == 0,
+            "An unrecognized PCL version reaches structural checks and missing host types are rejected");
+        Assert(!Harmony.GetAllPatchedMethods().Any(method => Harmony.GetPatchInfo(method).Owners.Contains(EntryPoint.PatchId)),
+            "Incompatible host structure leaves no production patches installed");
     }
 
     private static void TestPack(string name, string entry, string contents, string expected, int argumentCount, string baseFolder = "")

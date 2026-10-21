@@ -99,8 +99,8 @@ namespace PCL.DownloadRestore.Injector.Installation
                         string actual = process.MainModule?.FileName;
                         if (string.IsNullOrEmpty(actual) || string.Equals(actual, launcher, StringComparison.OrdinalIgnoreCase)) return true;
                     }
-                    catch (InvalidOperationException) { /* The process may have exited meanwhile. */ }
-                    catch { return true; } // An inaccessible matching process must not be modified.
+                    catch (InvalidOperationException) { /* 进程可能已经在此期间退出。 */ }
+                    catch { return true; } // 匹配的进程无法访问时，不得修改其文件。
                 }
             }
             return false;

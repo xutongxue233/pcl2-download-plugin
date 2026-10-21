@@ -19,7 +19,7 @@ namespace PCL.DownloadRestore.Injector.Installation
         public string LauncherSha256 { get; internal set; }
     }
 
-    // Names and types intentionally match the original PowerShell schema 1 receipt.
+    // 名称与类型刻意保持与原 PowerShell schema 1 安装记录一致。
     [DataContract]
     internal sealed class InstallState
     {

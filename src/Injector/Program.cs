@@ -46,7 +46,7 @@ namespace PCL.DownloadRestore.Injector
                 {
                     if (args[2] != "--report" || !string.Equals(Path.GetExtension(args[3]), ".json", StringComparison.OrdinalIgnoreCase))
                         throw new ArgumentException("报告必须使用 --report 指定新的 .json 文件。");
-                    // Refuse existing files: reports must never overwrite a launcher or installation state.
+                    // 拒绝覆盖已有文件：报告不能覆盖启动器或安装状态文件。
                     string path = InstallationPaths.SafePath(args[3]);
                     string pluginRoot = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(args[1])), "PCL", "Plugins", "DownloadRestore") + Path.DirectorySeparatorChar;
                     if (path.StartsWith(pluginRoot, StringComparison.OrdinalIgnoreCase))
@@ -89,8 +89,8 @@ namespace PCL.DownloadRestore.Injector
             catch { exitCode = 1; }
             finally
             {
-                // Dispose can flush buffered JSON; a failed report write must not
-                // escape as an unhandled exception after a completed operation.
+                // Dispose 可能会刷新缓冲中的 JSON；操作完成后，报告写入失败
+                // 也不应继续抛出未处理异常。
                 try { reportStream?.Dispose(); }
                 catch { exitCode = 1; }
             }

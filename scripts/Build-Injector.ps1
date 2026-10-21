@@ -1,16 +1,13 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
-    [ValidateSet('Debug', 'Release')][string] $Configuration = 'Release',
-    [string] $LauncherPath
+    [ValidateSet('Debug', 'Release')][string] $Configuration = 'Release'
 )
 . (Join-Path $PSScriptRoot 'Common.ps1')
 $projectRoot = Get-FullPath (Join-Path $PSScriptRoot '..')
 $injectorProject = Join-Path $projectRoot 'src\Injector\PCL.DownloadRestore.Injector.csproj'
 if (-not (Test-Path -LiteralPath $injectorProject -PathType Leaf)) { throw "Injector project not found: $injectorProject" }
 
-$arguments = @{ Configuration = $Configuration }
-if ($LauncherPath) { $arguments.LauncherPath = $LauncherPath }
-& (Join-Path $PSScriptRoot 'Build.ps1') @arguments
+# 项目引用会先编译引导器和插件，再将三个运行时 DLL 内嵌到注入器中。
 & dotnet build $injectorProject --configuration $Configuration --nologo
 if ($LASTEXITCODE -ne 0) { throw 'Injector compilation failed.' }
 
@@ -21,14 +18,14 @@ if (@(Get-ChildItem -LiteralPath $outputDirectory -File -Filter '*.dll').Count -
     throw 'The injector output has external DLL dependencies. The user-facing injector must be a single executable.'
 }
 
-# Load the freshly built, trusted assembly from bytes so verification never locks
-# the compiler output. No entry point or installer method is invoked here.
+# 从字节数组加载刚构建的可信程序集，避免校验时锁定编译产物。
+# 此处不会调用程序入口或安装器方法。
 $assembly = [Reflection.Assembly]::Load([IO.File]::ReadAllBytes($executable))
 if ($assembly.GetName().Name -ne 'PCL.DownloadRestore.Injector') { throw 'Unexpected executable assembly identity.' }
 $resourceFiles = [ordered]@{
-    'payload.PCL.PluginBootstrap.dll' = (Join-Path $projectRoot 'artifacts\payload\PCL.PluginBootstrap.dll')
-    'payload.PCL.DownloadRestore.dll' = (Join-Path $projectRoot 'artifacts\payload\PCL\Plugins\DownloadRestore\PCL.DownloadRestore.dll')
-    'payload.0Harmony.dll' = (Join-Path $projectRoot 'artifacts\payload\PCL\Plugins\DownloadRestore\0Harmony.dll')
+    'payload.PCL.PluginBootstrap.dll' = (Join-Path $projectRoot "src\Bootstrap\bin\$Configuration\net48\PCL.PluginBootstrap.dll")
+    'payload.PCL.DownloadRestore.dll' = (Join-Path $projectRoot "src\DownloadRestore\bin\$Configuration\net48\PCL.DownloadRestore.dll")
+    'payload.0Harmony.dll' = (Join-Path $projectRoot "src\DownloadRestore\bin\$Configuration\net48\0Harmony.dll")
 }
 $resourceNames = @($assembly.GetManifestResourceNames())
 foreach ($resource in $resourceFiles.GetEnumerator()) {

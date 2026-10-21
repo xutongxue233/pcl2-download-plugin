@@ -1,15 +1,11 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$HostExecutable,
     [string]$OutputDirectory
 )
 $ErrorActionPreference = 'Stop'
 if (-not $OutputDirectory) { $OutputDirectory = Join-Path $PSScriptRoot '..\refs' }
-$expectedHash = '6B6E1260CB5A1D6A303855F1C60CAB3D0BC1AEBBA7E40A964180188B271E7386'
 $hostPath = (Resolve-Path -LiteralPath $HostExecutable).Path
-if ((Get-FileHash -LiteralPath $hostPath -Algorithm SHA256).Hash -ne $expectedHash) {
-    throw 'Unsupported executable: expected the verified official PCL 2.99.0.0 SHA-256.'
-}
 $referenceDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 [IO.Directory]::CreateDirectory($referenceDirectory) | Out-Null
 $toolDirectory = Join-Path $PSScriptRoot '..\.tools\ResourceExtractor'
@@ -31,7 +27,7 @@ using System.Resources;
 using System.Security.Cryptography;
 using System.Text.Json;
 
-// Read PE metadata and raw resource values. Never load or execute the launcher.
+// 只读取 PE 元数据和原始资源，不加载或执行启动器。
 var expected = new HashSet<string>(new[] { "NAudio", "Newtonsoft.Json", "Ookii.Dialogs.Wpf", "Imazen.WebP", "CacheCow.Common", "CacheCow.Client.FileStore", "CacheCow.Client", "ThrottleDebounce", "System.Net.Http.Formatting", "Microsoft.Win32.Registry", "PCLCS", "MeloongCore.Wpf", "MeloongCore" }, StringComparer.Ordinal);
 var found = new Dictionary<string, string>(StringComparer.Ordinal);
 using var source = File.OpenRead(args[0]);
@@ -48,7 +44,7 @@ foreach (var handle in metadata.ManifestResources)
     var enumerator = reader.GetEnumerator();
     while (enumerator.MoveNext())
     {
-        var name = (string)enumerator.Key; // Do not access Value: that can deserialize objects.
+        var name = (string)enumerator.Key; // 不访问 Value，避免触发对象反序列化。
         if (!expected.Contains(name)) continue;
         reader.GetResourceData(name, out var resourceType, out var raw);
         if (resourceType != "ResourceTypeCode.ByteArray") throw new InvalidDataException($"Unexpected resource type for {name}: {resourceType}");

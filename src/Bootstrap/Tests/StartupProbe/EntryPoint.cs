@@ -8,10 +8,10 @@ using System.Windows;
 
 namespace PCL.DownloadRestore
 {
-    // Test-only payload. Exits after host startup but before the main window is shown.
+    // 仅用于测试的插件，在宿主完成启动后、主窗口显示前退出。
     public static class EntryPoint
     {
-        // Test-only hard exit prevents WPF from creating StartupUri after the probe.
+        // 仅在测试中强制退出，防止 WPF 在探测结束后创建 StartupUri 指向的窗口。
         [DllImport("kernel32.dll", ExactSpelling = true)]
         private static extern void ExitProcess(uint exitCode);
 

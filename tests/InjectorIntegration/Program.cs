@@ -22,12 +22,12 @@ internal static class Program
     private static readonly List<object> Cases = new List<object>();
     private static readonly List<string> Assertions = new List<string>();
     private static IDictionary<string, byte[]> payload;
-    private static string root, originalHost, runDirectory;
+    private static string originalHost, runDirectory;
     private static int caseNumber;
 
     private static int Main(string[] args)
     {
-        root = Path.GetFullPath(args[0]); originalHost = Path.GetFullPath(args[1]);
+        originalHost = Path.GetFullPath(args[1]);
         string reportDirectory = Path.GetFullPath(args[2]);
         Directory.CreateDirectory(reportDirectory);
         runDirectory = Path.Combine(reportDirectory, "run-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N").Substring(0, 6));
@@ -39,7 +39,7 @@ internal static class Program
             Check(payload.Count == 3 && payload.All(item => item.Value.Length > 0), "Real executable embeds exactly three nonempty payload files");
             Run("install/reinstall/disable/uninstall", BasicLifecycle);
             Run("original config exact restore and switch merge", ExistingConfiguration);
-            Run("unsupported executable rejected without mutation", UnsupportedExecutable);
+            Run("different executable checksum permits install and exact uninstall", DifferentExecutableChecksum);
             Run("conflicting bootstrap preserved", ExistingBootstrap);
             Run("invalid XML and duplicate/conflicting configuration rejected", InvalidConfigurations);
             Run("missing managed DLLs can be uninstalled", MissingPayloadUninstall);
@@ -51,8 +51,7 @@ internal static class Program
             Run("directory junction rejected without touching target", JunctionRejected);
             Run("installation failure rolls back files and original config", InstallRollback);
             Run("uninstallation failure restores installed state", UninstallRollback);
-            Run("PowerShell schema 1 installs uninstall through native service", PowerShellToNative);
-            Run("native schema 1 installs uninstall through PowerShell", NativeToPowerShell);
+            Run("historical schema 1 receipt remains compatible with native service", LegacySchemaOneReceipt);
             Run("fresh standalone EXE CLI without PowerShell on PATH", StandaloneCli);
         }
         catch (Exception exception) { Cases.Add(new { Name = "harness setup", Passed = false, Error = exception.ToString() }); }
@@ -166,13 +165,16 @@ internal static class Program
         string switches = document.SelectSingleNode("/configuration/runtime/AppContextSwitchOverrides")?.Attributes["value"]?.Value;
         Check(Switches.All(key => switches.Split(';').Contains(key + "=false")), "All four path and TLS compatibility switches are explicit secure values");
     }
-    private static void UnsupportedExecutable()
+    private static void DifferentExecutableChecksum()
     {
-        string exe = NewFixture("unsupported"); using (var stream = File.Open(exe, FileMode.Append)) stream.WriteByte(1);
+        string exe = NewFixture("different-checksum"); using (var stream = File.Open(exe, FileMode.Append)) stream.WriteByte(1);
         var before = Snapshot(Path.GetDirectoryName(exe)); var service = Service();
-        Check(!service.Inspect(exe).CanInstall, "Changed EXE is not installable");
-        ExpectFailure(() => service.Install(exe), "Install rejects unsupported SHA-256");
-        Check(SameSnapshot(before, Snapshot(Path.GetDirectoryName(exe))), "Unsupported EXE rejection writes nothing");
+        string changedHash = Hash(exe);
+        Check(changedHash != SupportedHash && service.Inspect(exe).CanInstall, "Different EXE checksum is installable without a fixed allowlist");
+        Check(service.Install(exe).Success && Hash(exe) == changedHash, "Install accepts a different checksum without changing the executable");
+        Check((string)ReadJson(Receipt(exe))["LauncherSha256AtInstall"] == changedHash, "Receipt records the actual selected executable checksum");
+        Check(service.Inspect(exe).Status == "Installed" && !service.Inspect(exe).CanInstall, "Different checksum still supports installed-state detection");
+        Check(service.Uninstall(exe).Success && SameSnapshot(before, Snapshot(Path.GetDirectoryName(exe))), "Uninstall exactly restores the different-checksum fixture");
     }
     private static void ExistingBootstrap()
     {
@@ -236,7 +238,7 @@ internal static class Program
         string exe = NewFixture("updated-launcher"); var service = Service(); service.Install(exe);
         using (var stream = File.Open(exe, FileMode.Append)) stream.WriteByte(2);
         string changedHash = Hash(exe); var status = service.Inspect(exe);
-        Check(!status.CanInstall && status.CanUninstall, "Updated EXE refuses injection but permits old plugin cleanup");
+        Check(status.Status == "Installed" && !status.CanInstall && status.CanUninstall, "Updated EXE keeps its existing load entry without requesting duplicate injection");
         Check(service.Uninstall(exe).Success && Hash(exe) == changedHash, "Uninstall does not overwrite updated executable");
     }
     private static void MissingReceipt()
@@ -288,21 +290,67 @@ internal static class Program
         Check(service.Inspect(exe).CanUninstall, "Rolled-back installation remains valid for retry");
         service.Uninstall(exe);
     }
-    private static void PowerShellToNative()
+    private static void LegacySchemaOneReceipt()
     {
-        string exe = NewFixture("ps-to-native"); byte[] original = ConfigBytes(); File.WriteAllBytes(exe + ".config", original);
-        string arguments = "-NoProfile -ExecutionPolicy Bypass -File " + Quote(Path.Combine(root, "scripts", "Install.ps1")) + " -LauncherPath " + Quote(exe) + " -PayloadPath " + Quote(Path.Combine(root, "artifacts", "payload"));
-        var result = Child(PowerShell(), arguments, root);
-        Check(result.ExitCode == 0, "PowerShell schema 1 installation succeeds: " + result.Output);
-        var service = Service(); Check(service.Inspect(exe).CanUninstall, "Native service recognizes PowerShell receipt");
-        Check(service.Uninstall(exe).Success && BytesEqual(original, exe + ".config"), "Native service exactly restores PowerShell installation backup");
-    }
-    private static void NativeToPowerShell()
-    {
-        string exe = NewFixture("native-to-ps"); byte[] original = ConfigBytes(); File.WriteAllBytes(exe + ".config", original); Service().Install(exe);
-        var result = Child(PowerShell(), "-NoProfile -ExecutionPolicy Bypass -File " + Quote(Path.Combine(root, "scripts", "Uninstall.ps1")) + " -LauncherPath " + Quote(exe), root);
-        Check(result.ExitCode == 0, "PowerShell understands native schema 1 receipt: " + result.Output);
-        Check(BytesEqual(original, exe + ".config") && !File.Exists(Bootstrap(exe)), "PowerShell exactly restores native installation backup");
+        string exe = NewFixture("legacy-schema-one");
+        string folder = Path.GetDirectoryName(exe);
+        byte[] original = ConfigBytes();
+
+        // 独立重现已退役脚本的 schema 1 安装记录，不调用当前安装器生成测试样本。
+        foreach (var item in payload)
+        {
+            string destination = Path.Combine(folder, item.Key);
+            Directory.CreateDirectory(Path.GetDirectoryName(destination));
+            File.WriteAllBytes(destination, item.Value);
+        }
+        File.WriteAllBytes(Backup(exe), original);
+        string installedConfig = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n" +
+            "<configuration>\r\n" +
+            "  <appSettings><add key=\"UserChoice\" value=\"保留\" /></appSettings>\r\n" +
+            "  <startup><supportedRuntime version=\"v4.0\" sku=\".NETFramework,Version=v4.6.2\" /></startup>\r\n" +
+            "  <runtime>\r\n" +
+            "    <AppContextSwitchOverrides value=\"Custom.Switch=true;Switch.System.IO.UseLegacyPathHandling=false;Switch.System.IO.BlockLongPaths=false;Switch.System.Net.DontEnableSchUseStrongCrypto=false;Switch.System.Net.DontEnableSystemDefaultTlsVersions=false\" />\r\n" +
+            "    <appDomainManagerAssembly value=\"PCL.PluginBootstrap, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null\" />\r\n" +
+            "    <appDomainManagerType value=\"PCL.PluginBootstrap.PluginDomainManager\" />\r\n" +
+            "  </runtime>\r\n</configuration>\r\n";
+        File.WriteAllText(exe + ".config", installedConfig, new UTF8Encoding(false));
+        var receipt = new
+        {
+            Schema = 1,
+            LauncherPath = exe,
+            LauncherSha256AtInstall = Hash(exe),
+            InstalledUtc = "2026-10-20T00:00:00.0000000Z",
+            OriginalConfigExisted = true,
+            OriginalConfigSha256 = Hash(Backup(exe)),
+            InstalledConfigSha256 = Hash(exe + ".config"),
+            BootstrapSha256 = Hash(Bootstrap(exe)),
+            PluginFiles = new[]
+            {
+                new { Path = "PCL.DownloadRestore.dll", Sha256 = Hash(Path.Combine(Plugin(exe), "PCL.DownloadRestore.dll")) },
+                new { Path = "0Harmony.dll", Sha256 = Hash(Path.Combine(Plugin(exe), "0Harmony.dll")) }
+            }
+        };
+        File.WriteAllText(Receipt(exe), Json.Serialize(receipt), new UTF8Encoding(false));
+        string diagnostic = Path.Combine(Plugin(exe), "bootstrap.log");
+        string userFile = Path.Combine(folder, "用户资料.txt");
+        File.WriteAllText(diagnostic, "keep historical diagnostics");
+        File.WriteAllText(userFile, "keep unrelated user data");
+        var installed = Snapshot(folder);
+
+        var service = Service();
+        var status = service.Inspect(exe);
+        Check(status.Status == "Installed" && !status.CanInstall && status.CanUninstall,
+            "Native service recognizes independently constructed historical schema 1 receipt");
+        Check(service.Install(exe).Success, "Historical schema 1 installation remains idempotent");
+        Check(SameSnapshot(installed, Snapshot(folder)), "Inspecting and reinstalling historical schema 1 changes no file bytes");
+        Check(service.Uninstall(exe).Success, "Native service uninstalls historical schema 1 installation");
+        Check(BytesEqual(original, exe + ".config"), "Historical schema 1 backup restores exact original bytes including BOM and CRLF");
+        Check(!File.Exists(Bootstrap(exe)) && !File.Exists(Receipt(exe)) && !File.Exists(Backup(exe)) &&
+            !File.Exists(Path.Combine(Plugin(exe), "PCL.DownloadRestore.dll")) && !File.Exists(Path.Combine(Plugin(exe), "0Harmony.dll")),
+            "Historical schema 1 uninstall removes registered binaries, receipt and backup");
+        Check(Hash(exe) == SupportedHash, "Historical schema 1 uninstall leaves the official EXE byte-identical");
+        Check(File.ReadAllText(diagnostic) == "keep historical diagnostics" && File.ReadAllText(userFile) == "keep unrelated user data",
+            "Historical schema 1 uninstall preserves diagnostics and unrelated user files");
     }
     private static void StandaloneCli()
     {
@@ -331,23 +379,23 @@ internal static class Program
         Check(reservedResult.ExitCode != 0 && !File.Exists(Receipt(exe)), "CLI rejects reserved receipt report path before creating it");
         Check(SameSnapshot(reservedSnapshot, Snapshot(Path.GetDirectoryName(exe))), "Reserved report path cannot poison installation metadata");
         using (var stream = File.Open(exe, FileMode.Append)) stream.WriteByte(1);
-        string rejectedReport = Path.Combine(isolated, "unsupported.json");
-        var rejected = Child(injector, "--install " + Quote(exe) + " --report " + Quote(rejectedReport), isolated, emptyPath);
-        Check(rejected.ExitCode != 0 && File.Exists(rejectedReport) && !Convert.ToBoolean(ReadJson(rejectedReport)["Success"]), "Standalone CLI rejects unsupported EXE with machine-readable error and no dialog");
+        string changedHash = Hash(exe);
+        foreach (string action in new[] { "install", "inspect", "uninstall" })
+        {
+            string report = Path.Combine(isolated, "different-checksum-" + action + ".json");
+            var result = Child(injector, "--" + action + " " + Quote(exe) + " --report " + Quote(report), isolated, emptyPath);
+            Check(result.ExitCode == 0 && File.Exists(report) && Convert.ToBoolean(ReadJson(report)["Success"]) && Hash(exe) == changedHash,
+                "Standalone CLI --" + action + " accepts an unknown checksum and preserves the executable");
+        }
+        string rejectedReport = Path.Combine(isolated, "missing-executable.json");
+        var rejected = Child(injector, "--install " + Quote(Path.Combine(isolated, "missing.exe")) + " --report " + Quote(rejectedReport), isolated, emptyPath);
+        Check(rejected.ExitCode != 0 && File.Exists(rejectedReport) && !Convert.ToBoolean(ReadJson(rejectedReport)["Success"]), "Standalone CLI still rejects a missing EXE with machine-readable error and no dialog");
     }
-    private static string PowerShell() => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe");
     private static string Quote(string value) => "\"" + value.Replace("\"", "\\\"") + "\"";
     private static ChildResult Child(string file, string arguments, string workingDirectory, string path = null)
     {
         var start = new ProcessStartInfo(file, arguments) { WorkingDirectory = workingDirectory, UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
         if (path != null) start.EnvironmentVariables["PATH"] = path;
-        if (Path.GetFileName(file).Equals("powershell.exe", StringComparison.OrdinalIgnoreCase))
-        {
-            // A parent PowerShell 7 session exports its own incompatible module paths.
-            // These interoperability checks run the real, unmodified Windows PS 5.1 scripts.
-            start.EnvironmentVariables["PSModulePath"] = Path.Combine(Path.GetDirectoryName(file), "Modules") + ";" +
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "WindowsPowerShell", "Modules");
-        }
         using (var process = Process.Start(start))
         {
             Task<string> output = process.StandardOutput.ReadToEndAsync(); Task<string> error = process.StandardError.ReadToEndAsync();

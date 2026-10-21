@@ -5,19 +5,21 @@
     <UseWPF>true</UseWPF>
     <AssemblyName>PCL.DownloadRestore.Injector</AssemblyName>
     <RootNamespace>PCL.DownloadRestore.Injector</RootNamespace>
-    <Version>1.1.2</Version>
+    <Version>1.1.3</Version>
     <LangVersion>latest</LangVersion>
     <Deterministic>true</Deterministic>
     <Prefer32Bit>false</Prefer32Bit>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Description>Third-party application-local plugin injector for the unchanged official PCL 2.99.0.0.</Description>
+    <Description>Third-party application-local PCL plugin injector with runtime interface compatibility checks.</Description>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System.Runtime.Serialization" />
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
-    <EmbeddedResource Include="..\..\artifacts\payload\PCL.PluginBootstrap.dll" LogicalName="payload.PCL.PluginBootstrap.dll" />
-    <EmbeddedResource Include="..\..\artifacts\payload\PCL\Plugins\DownloadRestore\PCL.DownloadRestore.dll" LogicalName="payload.PCL.DownloadRestore.dll" />
-    <EmbeddedResource Include="..\..\artifacts\payload\PCL\Plugins\DownloadRestore\0Harmony.dll" LogicalName="payload.0Harmony.dll" />
-    <Resource Include="UI\Resources\Font.ttf" />
+    <!-- 仅用于构建的依赖：载荷仍内嵌在单个注入器 EXE 中。 -->
+    <ProjectReference Include="..\Bootstrap\PCL.PluginBootstrap.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\DownloadRestore\PCL.DownloadRestore.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <EmbeddedResource Include="..\Bootstrap\bin\$(Configuration)\net48\PCL.PluginBootstrap.dll" LogicalName="payload.PCL.PluginBootstrap.dll" />
+    <EmbeddedResource Include="..\DownloadRestore\bin\$(Configuration)\net48\PCL.DownloadRestore.dll" LogicalName="payload.PCL.DownloadRestore.dll" />
+    <EmbeddedResource Include="..\DownloadRestore\bin\$(Configuration)\net48\0Harmony.dll" LogicalName="payload.0Harmony.dll" />
   </ItemGroup>
 </Project>

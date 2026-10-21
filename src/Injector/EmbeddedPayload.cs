@@ -5,7 +5,7 @@ using System.Reflection;
 
 namespace PCL.DownloadRestore.Injector
 {
-    /// <summary>The only distributable runtime files, embedded without loading or executing them.</summary>
+    /// <summary>仅允许分发这些运行时文件；嵌入时不加载或执行文件。</summary>
     public static class EmbeddedPayload
     {
         public static IDictionary<string, byte[]> ReadFiles()

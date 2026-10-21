@@ -9,7 +9,7 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
     <Version>1.0.0</Version>
-    <Description>Third-party runtime download restoration plugin for the unchanged PCL 2.99.0.0 executable.</Description>
+    <Description>Third-party runtime download restoration plugin that checks PCL method compatibility without rewriting the launcher executable.</Description>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Lib.Harmony" Version="2.4.2" />

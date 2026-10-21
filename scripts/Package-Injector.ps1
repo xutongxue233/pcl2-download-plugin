@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string] $InjectorDirectory,
     [string] $OutputPath,
@@ -6,7 +6,7 @@ param(
 )
 . (Join-Path $PSScriptRoot 'Common.ps1')
 if (-not $InjectorDirectory) { $InjectorDirectory = Join-Path $PSScriptRoot '..\artifacts\Injector' }
-if (-not $OutputPath) { $OutputPath = Join-Path $PSScriptRoot '..\artifacts\PCL.DownloadRestore.Injector-2.99.0.0.zip' }
+if (-not $OutputPath) { $OutputPath = Join-Path $PSScriptRoot '..\artifacts\PCL.DownloadRestore.Injector.zip' }
 if (-not $SourceOutputPath) { $SourceOutputPath = Join-Path $PSScriptRoot '..\artifacts\PCL.DownloadRestore.Injector-Source.zip' }
 $projectRoot = Get-FullPath (Join-Path $PSScriptRoot '..')
 $InjectorDirectory = Assert-SafePath $InjectorDirectory
@@ -33,7 +33,7 @@ $temporaryZip = Join-Path $outputDirectory ('.injector-distribution-' + [Guid]::
 try {
     $null = New-Item -ItemType Directory -Path (Join-Path $staging 'licenses') -Force
     [IO.File]::Copy($executable, (Join-Path $staging $exeName))
-    # Refresh human-readable reports at packaging time after the final GUI tests.
+    # 打包时重新复制最新说明和验证记录，避免沿用暂存目录中的旧文档。
     $copies = [ordered]@{
         'README.md' = (Join-Path $projectRoot 'INJECTOR.md')
         'VALIDATION.md' = (Join-Path $projectRoot 'INJECTOR-VALIDATION.md')
@@ -71,7 +71,7 @@ $sourceStaging = Assert-SafePath (Join-Path $sourceDirectory ('.injector-source-
 $sourceZip = Join-Path $sourceDirectory ('.injector-source-distribution-' + [Guid]::NewGuid().ToString('N') + '.zip')
 try {
     $null = New-Item -ItemType Directory -Path $sourceStaging
-    $allowedExtensions = @('.cs', '.csproj', '.xaml', '.ttf', '.ps1', '.cmd', '.md', '.txt', '.json', '.config', '.manifest', '.resx', '.ico', '.props', '.targets', '.sln', '.yml', '.yaml', '.gitignore', '.editorconfig')
+    $allowedExtensions = @('.cs', '.csproj', '.xaml', '.ps1', '.md', '.txt', '.json', '.config', '.manifest', '.resx', '.ico', '.props', '.targets', '.sln', '.yml', '.yaml', '.gitignore', '.editorconfig')
     foreach ($file in @(Get-ChildItem -LiteralPath $projectRoot -Recurse -File -Force)) {
         $relative = $file.FullName.Substring($projectRoot.Length + 1)
         if ($relative -match '(^|[\\/])(artifacts|refs|references|\.tools|\.git|\.vs|\.idea|\.analysis|bin|obj|test-results|TestResults|payload|packages|\.packages|deps|node_modules)([\\/]|$)') { continue }
@@ -81,7 +81,7 @@ try {
         $null = New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($destination)) -Force
         [IO.File]::Copy($file.FullName, $destination)
     }
-    foreach ($required in @('src\Injector\PCL.DownloadRestore.Injector.csproj', 'src\Injector\app.manifest', 'src\Injector\MainWindow.xaml', 'src\Injector\MainWindow.xaml.cs', 'src\Injector\UI\PclStyles.xaml', 'src\Injector\UI\Resources\Font.ttf', 'src\Injector\UI\SOURCE-NOTES.md', 'scripts\Build-Injector.ps1', 'scripts\Package-Injector.ps1', 'INJECTOR.md', 'INJECTOR-VALIDATION.md')) {
+    foreach ($required in @('PCL.DownloadRestore.sln', 'docs\VISUAL-STUDIO.md', 'src\Injector\PCL.DownloadRestore.Injector.csproj', 'src\Injector\app.manifest', 'src\Injector\MainWindow.xaml', 'src\Injector\MainWindow.xaml.cs', 'src\Injector\UI\PclStyles.xaml', 'src\Injector\UI\SOURCE-NOTES.md', 'scripts\Build-Injector.ps1', 'scripts\Package-Injector.ps1', 'INJECTOR.md', 'INJECTOR-VALIDATION.md')) {
         if (-not (Test-Path -LiteralPath (Join-Path $sourceStaging $required) -PathType Leaf)) { throw "Missing injector source file: $required" }
     }
     [IO.Compression.ZipFile]::CreateFromDirectory($sourceStaging, $sourceZip, [IO.Compression.CompressionLevel]::Optimal, $false)

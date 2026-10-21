@@ -3,19 +3,17 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Security.Cryptography;
 using System.Runtime.ExceptionServices;
 using System.Threading;
 
 namespace PCL.PluginBootstrap
 {
-    /// <summary>Application-local CLR startup hook; installed only via this launcher's .exe.config.</summary>
+    /// <summary>仅作用于当前应用的 CLR 启动钩子，通过此启动器的 .exe.config 安装。</summary>
     public sealed class PluginDomainManager : AppDomainManager
     {
-        public const string SupportedHostSha256 = "6B6E1260CB5A1D6A303855F1C60CAB3D0BC1AEBBA7E40A964180188B271E7386";
         private static readonly object LogLock = new object();
         private static string pluginDirectory;
-        private static string verifiedHostPath;
+        private static string hostExecutablePath;
         private static Assembly hostAssembly;
         private static int armed;
         private static int initialized;
@@ -33,7 +31,7 @@ namespace PCL.PluginBootstrap
                 var commandLine = Environment.GetCommandLineArgs();
                 if (commandLine.Skip(1).Any(argument => argument == "--update" || argument == "--gpu" || argument == "--memory"))
                     return;
-                // An absent plugin or disabled marker keeps the launcher's normal behavior.
+                // 插件缺失或存在禁用标记时，保持启动器的正常行为。
                 if (!Directory.Exists(pluginDirectory)) return;
                 if (File.Exists(Path.Combine(pluginDirectory, "disabled")))
                 {
@@ -47,24 +45,14 @@ namespace PCL.PluginBootstrap
                     return;
                 }
 
-                // EntryAssembly may not exist yet during CLR domain-manager initialization.
-                verifiedHostPath = Process.GetCurrentProcess().MainModule.FileName;
-                using (var stream = File.OpenRead(verifiedHostPath))
-                using (var sha = SHA256.Create())
-                {
-                    var hash = BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", "");
-                    if (!string.Equals(hash, SupportedHostSha256, StringComparison.OrdinalIgnoreCase))
-                    {
-                        Log("Unsupported executable SHA-256 " + hash + "; no patches applied.");
-                        return;
-                    }
-                }
+                // CLR 域管理器初始化期间，EntryAssembly 可能尚不存在。
+                hostExecutablePath = Process.GetCurrentProcess().MainModule.FileName;
                 if (File.Exists(Path.Combine(pluginDirectory, "diagnose-startup")))
                     AppDomain.CurrentDomain.FirstChanceException += TraceStartupException;
                 AppDomain.CurrentDomain.AssemblyResolve += ResolvePluginDependency;
                 AppDomain.CurrentDomain.AssemblyLoad += OnAssemblyLoad;
+                Log("Detected executable " + Path.GetFileName(hostExecutablePath) + "; attempting PCL startup binding.");
                 foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies()) TryArm(assembly);
-                Log("Verified official PCL 2.99.0.0; waiting for Application constructor.");
             }
             catch (Exception exception)
             {
@@ -74,7 +62,7 @@ namespace PCL.PluginBootstrap
 
         private static Assembly ResolvePluginDependency(object sender, ResolveEventArgs args)
         {
-            // Only satisfy our exact local payload assemblies, never launcher dependencies.
+            // 仅解析名称精确匹配的本地插件程序集，不处理启动器自身的依赖。
             var name = new AssemblyName(args.Name).Name;
             if (name != "0Harmony" && name != "PCL.DownloadRestore") return null;
             var candidate = Path.Combine(pluginDirectory, name + ".dll");
@@ -90,10 +78,18 @@ namespace PCL.PluginBootstrap
         {
             try
             {
-                if (assembly.IsDynamic || !string.Equals(assembly.Location, verifiedHostPath, StringComparison.OrdinalIgnoreCase)) return;
+                if (assembly.IsDynamic || !string.Equals(assembly.Location, hostExecutablePath, StringComparison.OrdinalIgnoreCase)) return;
                 if (Interlocked.CompareExchange(ref armed, 1, 0) != 0) return;
+                var identity = assembly.GetName();
+                if (identity.Name != "Plain Craft Launcher 2")
+                {
+                    AppDomain.CurrentDomain.AssemblyLoad -= OnAssemblyLoad;
+                    Log("Unsupported host assembly name " + identity.Name + "; normal startup continues without patches.");
+                    return;
+                }
                 hostAssembly = assembly;
-                // This event is synchronous: patch before the CLR executes the entry point.
+                Log("Detected PCL host assembly version " + identity.Version + "; inspecting Application constructor.");
+                // 此事件同步执行，因此可在 CLR 执行入口点前应用补丁。
                 var application = assembly.GetType("PCL.Application", true);
                 var constructor = application.GetConstructor(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public, null, Type.EmptyTypes, null);
                 if (constructor == null) throw new MissingMethodException("PCL.Application", ".ctor()");
@@ -115,14 +111,14 @@ namespace PCL.PluginBootstrap
             }
         }
 
-        // Harmony must be able to call this method from its generated assembly.
+        // Harmony 必须能够从其生成的程序集中调用此方法。
         public static void AfterApplicationConstructor(object __instance)
         {
             try
             {
-                // The host attached its Startup handler in the constructor. Appending ours
-                // runs after core/settings initialization, before WPF opens StartupUri.
-                // Patching PCL's static methods earlier can prematurely run their .cctors.
+                // 宿主已在构造函数中注册 Startup 处理程序；在其后追加我们的处理程序，
+                // 可确保它在核心与设置初始化完成后、WPF 打开 StartupUri 之前执行。
+                // 过早修补 PCL 的静态方法可能提前触发其静态构造函数（.cctor）。
                 var startup = __instance.GetType().GetEvent("Startup");
                 var callback = typeof(PluginDomainManager).GetMethod(nameof(AfterApplicationStartup), BindingFlags.Public | BindingFlags.Static);
                 startup.AddEventHandler(__instance, Delegate.CreateDelegate(startup.EventHandlerType, callback));
@@ -140,8 +136,8 @@ namespace PCL.PluginBootstrap
             if (Interlocked.CompareExchange(ref initialized, 1, 0) != 0) return;
             try
             {
-                // Core initialization and the launcher's resolver are now available.
-                // WPF creates the main window only after all Startup handlers return.
+                // 此时核心已完成初始化，启动器的程序集解析器也已可用。
+                // WPF 会在所有 Startup 处理程序返回后才创建主窗口。
                 var plugin = Assembly.LoadFrom(Path.Combine(pluginDirectory, "PCL.DownloadRestore.dll"));
                 var entryType = plugin.GetType("PCL.DownloadRestore.EntryPoint", true);
                 var initialize = entryType.GetMethod("Initialize", BindingFlags.Public | BindingFlags.Static,
@@ -169,7 +165,7 @@ namespace PCL.PluginBootstrap
                     File.AppendAllText(path, DateTimeOffset.Now.ToString("o") + " " + message + Environment.NewLine);
                 }
             }
-            catch { /* Diagnostics must never prevent the launcher from starting. */ }
+            catch { /* 诊断功能不得阻止启动器启动。 */ }
         }
 
         private static void TraceStartupException(object sender, FirstChanceExceptionEventArgs args)

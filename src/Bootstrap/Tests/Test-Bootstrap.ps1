@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$OutputDirectory,
     [switch]$Network
@@ -6,6 +6,8 @@ param(
 $ErrorActionPreference = 'Stop'
 if (-not $OutputDirectory) { $OutputDirectory = Join-Path $PSScriptRoot '..\..\..\artifacts\bootstrap-tests' }
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..\..'))
+# 此哈希只确认官方回归测试样本，不用于生产环境的加载判断。
+$officialFixtureSha256 = '6B6E1260CB5A1D6A303855F1C60CAB3D0BC1AEBBA7E40A964180188B271E7386'
 $testRoot = [IO.Path]::GetFullPath($OutputDirectory)
 [IO.Directory]::CreateDirectory($testRoot) | Out-Null
 [IO.File]::WriteAllText((Join-Path $testRoot 'results.json'), '{"Status":"running"}')
@@ -56,7 +58,7 @@ $minimalPayload = Join-Path (Split-Path $minimal) 'PCL\Plugins\DownloadRestore'
 [IO.File]::WriteAllText((Join-Path $minimalPayload '0Harmony.dll'), 'unused')
 $minimalHash = (Get-FileHash -LiteralPath $minimal -Algorithm SHA256).Hash
 Run-Probe $minimal
-if ((Get-Content -LiteralPath (Join-Path $minimalPayload 'bootstrap.log') -Raw) -notmatch 'Unsupported executable SHA-256') { throw 'Hash rejection was not logged.' }
+if ((Get-Content -LiteralPath (Join-Path $minimalPayload 'bootstrap.log') -Raw) -notmatch 'Unsupported host assembly name') { throw 'Assembly-name rejection was not logged.' }
 if ((Get-FileHash -LiteralPath $minimal -Algorithm SHA256).Hash -ne $minimalHash) { throw 'Minimal EXE changed.' }
 
 $missing = Prepare-Probe 'missing-plugin' $hashProbe
@@ -77,7 +79,9 @@ $maintenancePayload = Join-Path (Split-Path $maintenance) 'PCL\Plugins\DownloadR
 Run-Probe $maintenance '--memory'
 if (Test-Path -LiteralPath (Join-Path $maintenancePayload 'bootstrap.log')) { throw 'Maintenance-mode startup unexpectedly initialized the plugin.' }
 
-$official = Prepare-Probe 'official-host-startup' (Join-Path $root 'refs\Plain Craft Launcher 2.exe')
+$officialSource = Join-Path $root 'refs\Plain Craft Launcher 2.exe'
+if ((Get-FileHash -LiteralPath $officialSource -Algorithm SHA256).Hash -ne $officialFixtureSha256) { throw 'Unexpected official regression fixture SHA-256.' }
+$official = Prepare-Probe 'official-host-startup' $officialSource
 $networkMarker = Join-Path (Split-Path $official) 'network-probe'
 if ($Network) { [IO.File]::WriteAllText($networkMarker, '') } else { [IO.File]::Delete($networkMarker) }
 $officialPayload = Join-Path (Split-Path $official) 'PCL\Plugins\DownloadRestore'
@@ -91,15 +95,30 @@ if ((Get-FileHash -LiteralPath $official -Algorithm SHA256).Hash -ne $officialHa
 $officialLog = Get-Content -LiteralPath (Join-Path $officialPayload 'bootstrap.log') -Raw
 if ($Network -and ([regex]::Matches($officialLog, 'NETWORK_PROBE .* => 200,').Count -ne 2)) { throw 'Official and mirror HTTPS probes did not both succeed.' }
 
+# 仅修改隔离测试副本的 PE 尾部，验证改变 EXE 哈希不会阻止兼容的启动钩子。
+$changed = Prepare-Probe 'changed-host-bytes' $officialSource
+$changedStream = [IO.File]::Open($changed, [IO.FileMode]::Append, [IO.FileAccess]::Write)
+try { $changedStream.WriteByte(0) } finally { $changedStream.Dispose() }
+$changedHash = (Get-FileHash -LiteralPath $changed -Algorithm SHA256).Hash
+if ($changedHash -eq $officialFixtureSha256) { throw 'Changed-host fixture must have a different SHA-256.' }
+$changedPayload = Join-Path (Split-Path $changed) 'PCL\Plugins\DownloadRestore'
+[IO.Directory]::CreateDirectory($changedPayload) | Out-Null
+Copy-Item -LiteralPath (Join-Path $probeDirectory 'PCL.DownloadRestore.dll') -Destination $changedPayload -Force
+Copy-Item -LiteralPath (Join-Path $probeDirectory '0Harmony.dll') -Destination $changedPayload -Force
+Run-Probe $changed
+if ((Get-Content -LiteralPath (Join-Path $changedPayload 'bootstrap.log') -Raw) -notmatch 'STARTUP_PROBE_PASS') { throw 'Changed-host startup probe did not pass.' }
+if ((Get-FileHash -LiteralPath $changed -Algorithm SHA256).Hash -ne $changedHash) { throw 'Changed-host EXE was modified during startup.' }
+
 $results = [ordered]@{
     DomainManagerAutostart = 'pass'
-    UnsupportedHashRejected = 'pass'
+    UnsupportedAssemblyNameRejected = 'pass'
     MissingPluginContinues = 'pass'
     DisabledPluginContinues = 'pass'
     MaintenanceModeContinues = 'pass'
     OfficialConstructorPostfix = 'pass'
     OfficialEmbeddedResolver = 'pass'
     MainStaThreadAfterHostStartupBeforeMainWindow = 'pass'
+    ChangedHostHashAcceptedByStartupHook = 'pass'
     OfficialExeUnchangedSha256 = $officialHash
 }
 if ($Network) { $results['OfficialAndMirrorHttpsWithCertificateVerification'] = 'pass' }

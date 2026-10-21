@@ -38,8 +38,8 @@ namespace PCL.DownloadRestore
             Type resourceVersion = RequireType(host, "PCL.ResourceVersion");
             result.ResourceToListItem = Method(resourceVersion, "ToListItem", 3, false);
             result.ResourceInstallClick = Method(resourcePage, "Install_Click", 2, false);
-            // VB's AddressOf adapter narrows the sender from Object to MyListItem.
-            // The delegate cannot bind directly to Install_Click's narrower first argument.
+            // VB 的 AddressOf 适配器将 sender 从 Object 窄化转换为 MyListItem。
+            // 委托无法直接绑定 Install_Click 中类型范围更窄的第一个参数。
             result.ResourceInstallAdapter = Method(resourcePage, "_Lambda$__R18-5", 2, false);
             result.ResourceSaveClick = Method(resourcePage, "Save_Click", 2, false);
             result.RunInThread = Method(RequireType(host, "PCL.ModBase"), "RunInThread", 1, true);
@@ -61,7 +61,7 @@ namespace PCL.DownloadRestore
                 if (installer.ReturnType != result.ModpackInstall.ReturnType)
                     throw new MissingMethodException("Unexpected installer result: " + installer.Name);
 
-            // Use the host's file chooser, including its normal filtering, logging and path handling.
+            // 使用宿主的文件选择器，保留其原有的筛选、日志和路径处理。
             var dialogs = RequireType(Assembly.Load("MeloongCore.Wpf"), "MeloongCore.Wpf.Dialogs");
             result.SelectFile = Method(dialogs, "SelectFile", 4, true);
             Type filter = Nullable.GetUnderlyingType(result.SelectFile.GetParameters()[3].ParameterType);

@@ -8,10 +8,9 @@ using System.Text.RegularExpressions;
 
 namespace PCL.DownloadRestore.Injector.Installation
 {
-    /// <summary>Pure managed, application-local installer. It never writes to the launcher EXE.</summary>
+    /// <summary>纯托管安装器，仅作用于应用程序目录，始终不写入启动器 EXE。</summary>
     public sealed class InstallationService
     {
-        public const string SupportedLauncherSha256 = "6B6E1260CB5A1D6A303855F1C60CAB3D0BC1AEBBA7E40A964180188B271E7386";
         private const string BootstrapKey = "PCL.PluginBootstrap.dll";
         private const string PluginPrefix = @"PCL\Plugins\DownloadRestore\";
         private static readonly string[] PayloadKeys = { BootstrapKey, PluginPrefix + "PCL.DownloadRestore.dll", PluginPrefix + "0Harmony.dll" };
@@ -24,7 +23,7 @@ namespace PCL.DownloadRestore.Injector.Installation
                 PayloadKeys.Any(key => !payload.ContainsKey(key) || payload[key] == null || payload[key].Length == 0) ||
                 payload.Keys.Any(key => !PayloadKeys.Contains(key, StringComparer.Ordinal)))
                 throw new ArgumentException("安装器内嵌文件不完整或文件名无效，请重新获取完整安装器。", nameof(payload));
-            // A caller changing its resource buffers must not change a running transaction.
+            // 调用方修改资源缓冲区时，不得影响正在执行的事务。
             this.payload = PayloadKeys.ToDictionary(key => key, key => (byte[])payload[key].Clone(), StringComparer.Ordinal);
             logger = log;
         }
@@ -43,20 +42,18 @@ namespace PCL.DownloadRestore.Injector.Installation
                     InstallState state = ReadState(paths);
                     AssertUnchanged(paths, state, true);
                     bool missing = !File.Exists(paths.Bootstrap) || state.PluginFiles.Any(file => !File.Exists(paths.OwnedPluginFile(file.Path)));
-                    if (!Same(hash, SupportedLauncherSha256))
-                        return Inspection("Updated", "PCL 程序已更新或替换，插件会跳过这个未适配版本。可以卸载原插件，当前 EXE 会保留。", hash, false, true);
                     if (missing)
                         return Inspection("Incomplete", "部分插件文件已缺失。可以先卸载以恢复启动配置，再重新安装。", hash, false, true);
                     if (File.Exists(paths.Disabled))
                         return Inspection("Disabled", "插件已安装但处于禁用状态。点击安装可重新启用，也可以卸载。", hash, true, true);
-                    return Inspection("Installed", "插件已安装，每次正常启动 PCL 时自动生效。", hash, false, true);
+                    return Inspection("Installed", Same(hash, state.LauncherSha256AtInstall)
+                        ? "加载入口已安装，每次启动 PCL 时会尝试加载插件。实际兼容结果请查看启动日志。"
+                        : "PCL 文件已变更，加载入口仍在；实际兼容结果请查看启动日志。升级旧插件需先卸载后重新安装。", hash, false, true);
                 }
                 AssertNoInstallation(paths);
-                if (!Same(hash, SupportedLauncherSha256))
-                    return Inspection("Unsupported", "此 EXE 不是已验证的官方 PCL 2.99.0.0，不能安装该版本插件。请重新选择受支持的原版程序。", hash);
-                // Validate XML and extension conflicts without writing any file.
+                // 校验 XML 和扩展冲突，不写入任何文件。
                 LauncherConfiguration.Patch(ReadOptionalConfig(paths));
-                return Inspection("Ready", "已确认是受支持的官方 PCL 2.99.0.0，可以安装插件。", hash, true, false);
+                return Inspection("Ready", "可以尝试注入。请自行确认所选 PCL 来源正确；实际兼容结果以启动日志为准。", hash, true, false);
             }
             catch (Exception ex)
             {
@@ -72,9 +69,8 @@ namespace PCL.DownloadRestore.Injector.Installation
                 using (var operationLock = new InstallationLock(paths.Root))
                 {
                     paths.AssertStopped();
+                    // 哈希只记录实际文件并检测事务期间的变化，不作为版本准入白名单。
                     string hash = InstallationPaths.HashFile(paths.Launcher);
-                    if (!Same(hash, SupportedLauncherSha256))
-                        throw InstallationPaths.Error("仅支持已验证的官方 PCL 2.99.0.0，选中的 EXE 不匹配。未修改任何文件。SHA-256：" + hash);
                     if (InstallationPaths.Exists(paths.State))
                     {
                         InstallState state = ReadState(paths);
@@ -84,7 +80,7 @@ namespace PCL.DownloadRestore.Injector.Installation
                             paths.AssertStopped();
                             InstallationPaths.SafePath(paths.Disabled, paths.Plugin);
                             File.Delete(paths.Disabled);
-                            return Success("插件已重新启用，下次启动 PCL 时自动生效。", hash);
+                            return Success("插件已重新启用，下次启动 PCL 时会尝试加载，结果请查看启动日志。", hash);
                         }
                         return Success("插件已经安装，无需重复注入。现有配置和文件未改变。", hash);
                     }
@@ -178,14 +174,14 @@ namespace PCL.DownloadRestore.Injector.Installation
                     InstallationPaths.SafePath(paths.Disabled, paths.Plugin);
                     File.Delete(paths.Disabled);
                 }
-                return Success("安装成功。官方 EXE 保持不变；以后照常启动这个 PCL，下载恢复插件会自动加载。", initialHash);
+                return Success("安装成功，所选 EXE 保持不变。以后照常启动 PCL 时会尝试加载下载恢复插件，实际兼容结果请查看启动日志。", initialHash);
             }
             catch (Exception failure)
             {
                 try
                 {
                     if (configChanged) ReplaceConfig(paths, original, staging);
-                    // Keep receipt/backup until payload cleanup succeeds, retaining recovery data.
+                    // 载荷清理成功前保留安装记录和备份，确保恢复数据仍然可用。
                     foreach (string file in createdFiles.Where(file => file != paths.State && file != paths.Backup).Reverse())
                     {
                         InstallationPaths.SafePath(file, paths.Root);
@@ -222,7 +218,7 @@ namespace PCL.DownloadRestore.Injector.Installation
                 paths.AssertStopped();
                 AssertUnchanged(paths, state, true);
                 AssertHash(paths.Launcher, initialHash, "卸载期间启动器发生了变化，请重新检查后重试。");
-                // The CLR must stop requesting the manager before its DLL is removed.
+                // 移除管理器 DLL 前，必须先让 CLR 停止请求加载该管理器。
                 ReplaceConfig(paths, original, staging);
                 configChanged = true;
                 var owned = new List<string> { paths.Bootstrap };
@@ -243,7 +239,7 @@ namespace PCL.DownloadRestore.Injector.Installation
             {
                 try
                 {
-                    // Restore every moved DLL before re-enabling its startup configuration.
+                    // 重新启用启动配置前，先还原所有已移动的 DLL。
                     foreach (var file in moved.AsEnumerable().Reverse())
                     {
                         InstallationPaths.SafePath(file.Key, paths.Root);
@@ -262,7 +258,7 @@ namespace PCL.DownloadRestore.Injector.Installation
             finally { if (!preserveStaging) TryCleanStaging(staging, paths.Root); }
             try { paths.RemoveEmptyPluginDirectories(state.PluginFiles.Select(file => file.Path)); }
             catch (Exception ex) { Log("插件已卸载，部分空目录未删除：" + ex.Message); }
-            return Success("卸载成功，已恢复安装前的启动配置。官方 EXE、游戏文件及诊断日志均已保留。", initialHash);
+            return Success("卸载成功，已恢复安装前的启动配置。所选 EXE、游戏文件及诊断日志均已保留。", initialHash);
         }
 
         private static void AssertNoInstallation(InstallationPaths paths)
@@ -364,7 +360,7 @@ namespace PCL.DownloadRestore.Injector.Installation
             InstallationPaths.SafePath(path, root);
             using (var output = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
-                createdFiles.Add(path); // Only after this transaction successfully created the file.
+                createdFiles.Add(path); // 仅在当前事务成功创建文件后记录。
                 output.Write(bytes, 0, bytes.Length);
                 output.Flush(true);
             }
@@ -387,7 +383,7 @@ namespace PCL.DownloadRestore.Injector.Installation
             {
                 InstallationPaths.SafePath(staging, root);
                 if (!Directory.Exists(staging)) return;
-                // Our staging folders are flat. Never recurse into an unexpected directory/link.
+                // 暂存目录只有一层；不得递归进入意外的目录或链接。
                 string[] entries = Directory.GetFileSystemEntries(staging);
                 foreach (string entry in entries)
                 {
@@ -419,7 +415,7 @@ namespace PCL.DownloadRestore.Injector.Installation
 
         private void Log(string message)
         {
-            try { logger?.Invoke(message); } catch { /* UI logging cannot invalidate an installation. */ }
+            try { logger?.Invoke(message); } catch { /* 界面日志记录失败不能影响安装。 */ }
         }
     }
 }

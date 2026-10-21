@@ -67,7 +67,7 @@ namespace PCL.DownloadRestore.Injector
             inspection = null;
             lastInspectionLog = null;
             checking = false;
-            SetStatus("请选择官方 PCL 2.99.0.0", "选择后会自动检查。", "ColorBrush1");
+            SetStatus("请选择 PCL 程序", "选择后会自动检查安装状态。", "ColorBrush1");
             UpdateButtons();
             pathTimer.Stop();
             pathTimer.Start();
@@ -101,7 +101,7 @@ namespace PCL.DownloadRestore.Injector
             UpdateButtons();
             try
             {
-                if (path.Length == 0) { SetStatus("请选择官方 PCL 2.99.0.0", "安装一次，之后启动 PCL 自动生效。", "ColorBrush1"); return; }
+                if (path.Length == 0) { SetStatus("请选择 PCL 程序", "安装一次，之后启动 PCL 自动尝试加载。", "ColorBrush1"); return; }
                 if (!quiet) SetStatus("正在检查…", "", "ColorBrushGray3");
                 var result = await Task.Run(() => service.Inspect(path));
                 if (request != generation || closed) return;
@@ -121,12 +121,10 @@ namespace PCL.DownloadRestore.Injector
         {
             switch (inspection.Status)
             {
-                case "Ready": SetStatus("可以注入", "安装后照常启动 PCL，插件会自动加载。", "ColorBrush2"); break;
-                case "Installed": SetStatus("已注入，无需重复操作", "照常启动 PCL 即可，插件会自动加载。", "ColorBrush2"); break;
+                case "Ready": SetStatus("可以尝试注入", "请确认 PCL 来源正确，安装后可在启动日志中查看兼容结果。", "ColorBrush2"); break;
+                case "Installed": SetStatus("已注入，无需重复操作", "照常启动 PCL，在日志中查看插件加载结果。", "ColorBrush2"); break;
                 case "Disabled": SetStatus("插件已停用", "点击“启用插件”可重新启用。", "ColorBrushGray3"); break;
                 case "Running": SetStatus("请先退出 PCL", "退出后会自动刷新状态。", "ColorBrush1"); break;
-                case "Unsupported": SetStatus("此版本暂不支持", "请选择官方 PCL 2.99.0.0。", "ColorBrushRedDark"); break;
-                case "Updated": SetStatus("PCL 已更新", "可卸载旧插件；新版需要重新适配。", "ColorBrush1"); break;
                 case "Incomplete": SetStatus("插件文件不完整", "请先卸载插件，再重新注入。", "ColorBrushRedDark"); break;
                 default: SetStatus("暂时无法操作", inspection.Message, "ColorBrushRedDark"); break;
             }
@@ -201,7 +199,7 @@ namespace PCL.DownloadRestore.Injector
                 string text = "本次操作日志" + Environment.NewLine + history + Environment.NewLine +
                     "所选 PCL 的插件启动日志（历史记录）" + Environment.NewLine + startupLog;
                 if (LogsText.Text == text) return;
-                // Preserve the scroll position when reading older entries.
+                // 阅读较早日志时保留当前滚动位置。
                 double offset = LogsText.VerticalOffset;
                 bool atEnd = offset + LogsText.ViewportHeight >= LogsText.ExtentHeight - 2;
                 LogsText.Text = text;
@@ -229,7 +227,7 @@ namespace PCL.DownloadRestore.Injector
                     if (offset > 0)
                     {
                         int newline = Array.IndexOf(bytes, (byte)'\n', 0, length);
-                        // Keep a readable tail even if one very long entry fills the entire limit.
+                        // 即使单条日志超出整个长度上限，也保留可读的末尾内容。
                         if (newline >= 0 && newline < length - 1) start = newline + 1;
                         while (start < length && (bytes[start] & 0xC0) == 0x80) start++;
                     }

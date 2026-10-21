@@ -4,7 +4,7 @@
   "distribution": "plugin-only; official executable excluded",
   "checks": [
     "Build bootstrap and restoration plugin without compiling PCL",
-    "Reject unsupported executable without changing it",
+    "Allow a different executable checksum while preserving its bytes during install and uninstall",
     "Install, repeat install, uninstall preserve executable SHA-256",
     "Preserve existing configuration and unrelated files",
     "Refuse conflicting application domain manager or edited configuration",

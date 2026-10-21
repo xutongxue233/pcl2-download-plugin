@@ -1,7 +1,7 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <!-- Adapted from the bundled PCL 2.99 WPF controls. See SOURCE-NOTES.md. -->
-    <!-- Runtime default: ModSecret.ThemeRefresh, Hue=210, Sat=85, LightAdjust=0. -->
+    <!-- 根据随附的 PCL 2.99 WPF 控件适配，来源见 SOURCE-NOTES.md。 -->
+    <!-- 运行时默认值：ModSecret.ThemeRefresh，Hue=210、Sat=85、LightAdjust=0。 -->
     <SolidColorBrush x:Key="ColorBrush1">#333E48</SolidColorBrush>
     <SolidColorBrush x:Key="ColorBrush2">#0F64B8</SolidColorBrush>
     <SolidColorBrush x:Key="ColorBrush3">#127AE1</SolidColorBrush>
@@ -51,7 +51,7 @@
         <Setter Property="TextTrimming" Value="CharacterEllipsis" />
     </Style>
 
-    <!-- MyButton's two Borders retain a stationary hit target while pressed. -->
+    <!-- MyButton 的双 Border 结构使按下时的鼠标命中区域保持不动。 -->
     <Style x:Key="PclButton" TargetType="Button">
         <Setter Property="OverridesDefaultStyle" Value="True" />
         <Setter Property="FocusVisualStyle" Value="{x:Null}" />
@@ -113,7 +113,7 @@
         </Setter>
     </Style>
 
-    <!-- PCL's Highlight state uses a blue outline, not a solid fill. -->
+    <!-- PCL 的 Highlight 状态使用蓝色描边，不使用实色填充。 -->
     <Style x:Key="PclPrimaryButton" TargetType="Button" BasedOn="{StaticResource PclButton}">
         <Setter Property="Foreground" Value="{DynamicResource ColorBrush2}" />
         <Setter Property="BorderBrush" Value="{DynamicResource ColorBrush2}" />
@@ -183,7 +183,7 @@
         <Setter Property="BorderThickness" Value="0" />
     </Style>
 
-    <!-- Keep the shadow on a sibling background so text is never rendered into the effect. -->
+    <!-- 阴影放在同级背景层，避免文字参与阴影效果的渲染。 -->
     <Style x:Key="PclCardShadow" TargetType="Border" BasedOn="{StaticResource PclCard}">
         <Setter Property="IsHitTestVisible" Value="False" />
         <Setter Property="Effect">
@@ -199,7 +199,7 @@
         <Setter Property="Margin" Value="15,12,0,0" />
     </Style>
 
-    <!-- MyIconButton's White theme, for title-bar glyphs supplied by the host. -->
+    <!-- MyIconButton 的 White 主题，用于宿主提供的标题栏图标。 -->
     <Style x:Key="PclTitleButton" TargetType="Button">
         <Setter Property="OverridesDefaultStyle" Value="True" />
         <Setter Property="FocusVisualStyle" Value="{x:Null}" />

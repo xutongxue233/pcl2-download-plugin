@@ -9,7 +9,7 @@
         TextOptions.TextFormattingMode="Ideal" TextOptions.TextRenderingMode="Grayscale"
         UseLayoutRounding="True" SnapsToDevicePixels="True"
         Closing="WindowClosing" Closed="WindowClosed" Activated="WindowActivated">
-    <!-- FormMain.xaml: 48-DIP header, 6-DIP window corners, original window controls. -->
+    <!-- 沿用 FormMain.xaml：48 DIP 顶栏、6 DIP 窗口圆角及原版窗口控件。 -->
     <Grid Margin="18">
         <Border CornerRadius="6" Background="White" IsHitTestVisible="False">
             <Border.Effect><DropShadowEffect Color="#343D4A" BlurRadius="9" ShadowDepth="1" Opacity="0.18" /></Border.Effect>
@@ -43,8 +43,8 @@
                                     <Button x:Name="BrowseButton" Grid.Column="1" Content="选择文件" Style="{StaticResource PclButton}" Width="90" Height="30" Click="BrowseClick" />
                                 </Grid>
                                 <StackPanel Margin="0,16,0,0" MinHeight="43">
-                                    <TextBlock x:Name="StatusTitle" Text="请选择官方 PCL 2.99.0.0" />
-                                    <TextBlock x:Name="StatusMessage" Text="安装一次，之后启动 PCL 自动生效。" Foreground="{DynamicResource ColorBrushGray3}" FontSize="12" Margin="0,5,0,0" TextWrapping="Wrap" />
+                                    <TextBlock x:Name="StatusTitle" Text="请选择 PCL 程序" />
+                                    <TextBlock x:Name="StatusMessage" Text="安装一次，之后启动 PCL 自动尝试加载。" Foreground="{DynamicResource ColorBrushGray3}" FontSize="12" Margin="0,5,0,0" TextWrapping="Wrap" />
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,17,0,0">
                                     <Button x:Name="InstallButton" Content="注入插件" Style="{StaticResource PclPrimaryButton}" Width="120" Height="35" Margin="0,0,12,0" IsEnabled="False" Click="InstallClick" />
@@ -54,7 +54,7 @@
                         </Border>
                     </Grid>
                     <Grid Margin="0,13,0,0">
-                        <TextBlock Text="适用于 PCL 2.99.0.0 · 第三方插件" FontSize="12" Foreground="{DynamicResource ColorBrushGray3}" VerticalAlignment="Center" />
+                        <TextBlock Text="第三方插件 · 按实际接口尝试加载" FontSize="12" Foreground="{DynamicResource ColorBrushGray3}" VerticalAlignment="Center" />
                         <Button x:Name="LogsButton" Content="查看日志" HorizontalAlignment="Right" Style="{StaticResource PclLinkButton}" Click="LogsClick" />
                     </Grid>
                     <Grid x:Name="LogsPanel" Visibility="Collapsed" Margin="0,12,0,0">
