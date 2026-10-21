@@ -5,7 +5,7 @@
     <UseWPF>true</UseWPF>
     <AssemblyName>PCL.DownloadRestore.Injector</AssemblyName>
     <RootNamespace>PCL.DownloadRestore.Injector</RootNamespace>
-    <Version>1.1.3</Version>
+    <Version>1.1.4</Version>
     <LangVersion>latest</LangVersion>
     <Deterministic>true</Deterministic>
     <Prefer32Bit>false</Prefer32Bit>

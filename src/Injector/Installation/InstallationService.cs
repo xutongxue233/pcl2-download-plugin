@@ -9,12 +9,14 @@ using System.Text.RegularExpressions;
 namespace PCL.DownloadRestore.Injector.Installation
 {
     /// <summary>纯托管安装器，仅作用于应用程序目录，始终不写入启动器 EXE。</summary>
-    public sealed class InstallationService
+    public sealed partial class InstallationService
     {
         private const string BootstrapKey = "PCL.PluginBootstrap.dll";
         private const string PluginPrefix = @"PCL\Plugins\DownloadRestore\";
         private static readonly string[] PayloadKeys = { BootstrapKey, PluginPrefix + "PCL.DownloadRestore.dll", PluginPrefix + "0Harmony.dll" };
         private readonly Dictionary<string, byte[]> payload;
+        private readonly Dictionary<string, string> payloadHashes;
+        private readonly string packageVersion = EmbeddedPayload.PackageVersion;
         private readonly Action<string> logger;
 
         public InstallationService(IDictionary<string, byte[]> payload, Action<string> log = null)
@@ -25,6 +27,7 @@ namespace PCL.DownloadRestore.Injector.Installation
                 throw new ArgumentException("安装器内嵌文件不完整或文件名无效，请重新获取完整安装器。", nameof(payload));
             // 调用方修改资源缓冲区时，不得影响正在执行的事务。
             this.payload = PayloadKeys.ToDictionary(key => key, key => (byte[])payload[key].Clone(), StringComparer.Ordinal);
+            payloadHashes = this.payload.ToDictionary(item => item.Key, item => InstallationPaths.HashBytes(item.Value), StringComparer.Ordinal);
             logger = log;
         }
 
@@ -41,14 +44,7 @@ namespace PCL.DownloadRestore.Injector.Installation
                 {
                     InstallState state = ReadState(paths);
                     AssertUnchanged(paths, state, true);
-                    bool missing = !File.Exists(paths.Bootstrap) || state.PluginFiles.Any(file => !File.Exists(paths.OwnedPluginFile(file.Path)));
-                    if (missing)
-                        return Inspection("Incomplete", "部分插件文件已缺失。可以先卸载以恢复启动配置，再重新安装。", hash, false, true);
-                    if (File.Exists(paths.Disabled))
-                        return Inspection("Disabled", "插件已安装但处于禁用状态。点击安装可重新启用，也可以卸载。", hash, true, true);
-                    return Inspection("Installed", Same(hash, state.LauncherSha256AtInstall)
-                        ? "加载入口已安装，每次启动 PCL 时会尝试加载插件。实际兼容结果请查看启动日志。"
-                        : "PCL 文件已变更，加载入口仍在；实际兼容结果请查看启动日志。升级旧插件需先卸载后重新安装。", hash, false, true);
+                    return InspectRegistered(paths, state, hash);
                 }
                 AssertNoInstallation(paths);
                 // 校验 XML 和扩展冲突，不写入任何文件。
@@ -125,7 +121,8 @@ namespace PCL.DownloadRestore.Injector.Installation
             }).ToList();
             var state = new InstallState
             {
-                Schema = 1,
+                Schema = 2,
+                PackageVersion = packageVersion,
                 LauncherPath = paths.Launcher,
                 LauncherSha256AtInstall = initialHash,
                 InstalledUtc = DateTime.UtcNow.ToString("o"),
@@ -297,7 +294,8 @@ namespace PCL.DownloadRestore.Injector.Installation
                     state = (InstallState)new DataContractJsonSerializer(typeof(InstallState)).ReadObject(input);
             }
             catch (Exception ex) { throw InstallationPaths.Error("无法读取插件安装记录，请保留记录和原配置备份，不要直接删除启动 DLL。记录：" + paths.State, ex); }
-            if (state == null || state.Schema != 1 || !Same(state.LauncherPath, paths.Launcher) ||
+            if (state == null || (state.Schema != 1 && state.Schema != 2) ||
+                (state.Schema == 2 && !PluginVersions.IsValid(state.PackageVersion)) || !Same(state.LauncherPath, paths.Launcher) ||
                 !IsHash(state.LauncherSha256AtInstall) || !IsHash(state.BootstrapSha256) || !IsHash(state.InstalledConfigSha256) ||
                 (state.OriginalConfigExisted && !IsHash(state.OriginalConfigSha256)) || state.PluginFiles == null)
                 throw InstallationPaths.Error("安装记录与选中的启动器不匹配或已损坏。请使用原安装位置，保留备份后再处理。");
@@ -402,8 +400,10 @@ namespace PCL.DownloadRestore.Injector.Installation
             return new OperationResult { Success = true, Message = message, LauncherSha256 = hash };
         }
 
-        private static InspectionResult Inspection(string status, string message, string hash, bool install = false, bool uninstall = false) =>
-            new InspectionResult { Status = status, Message = message, LauncherSha256 = hash, CanInstall = install, CanUninstall = uninstall };
+        private InspectionResult Inspection(string status, string message, string hash, bool install = false, bool uninstall = false,
+            string version = null, bool upgrade = false, bool disabled = false) =>
+            new InspectionResult { Status = status, Message = message, LauncherSha256 = hash, CanInstall = install, CanUninstall = uninstall,
+                InstalledVersion = version, AvailableVersion = packageVersion, CanUpgrade = upgrade, IsDisabled = disabled };
 
         private static string Explain(Exception ex)
         {

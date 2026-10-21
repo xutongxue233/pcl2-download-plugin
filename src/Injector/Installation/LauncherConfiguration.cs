@@ -94,6 +94,21 @@ namespace PCL.DownloadRestore.Injector.Installation
             return false;
         }
 
+        internal static byte[] SuspendManager(byte[] installed)
+        {
+            XmlDocument doc = Parse(installed);
+            var assemblies = doc.SelectNodes("/configuration/runtime/appDomainManagerAssembly");
+            var types = doc.SelectNodes("/configuration/runtime/appDomainManagerType");
+            if (assemblies.Count != 1 || types.Count != 1 ||
+                ((XmlElement)assemblies[0]).GetAttribute("value") != BootstrapAssembly ||
+                ((XmlElement)types[0]).GetAttribute("value") != BootstrapType)
+                throw InstallationPaths.Error("启动配置中的加载入口与本插件不一致，无法安全升级。");
+            // 升级期间只暂停自己的加载入口，其余配置保留；完成后恢复原始字节。
+            assemblies[0].ParentNode.RemoveChild(assemblies[0]);
+            types[0].ParentNode.RemoveChild(types[0]);
+            using (var output = new MemoryStream()) { doc.Save(output); return output.ToArray(); }
+        }
+
         private static XmlDocument Parse(byte[] bytes)
         {
             try

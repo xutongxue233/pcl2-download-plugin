@@ -8,7 +8,10 @@
     <Deterministic>true</Deterministic>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
-    <Version>1.0.0</Version>
+    <!-- 程序集身份保持稳定；文件版本与插件包版本同步。 -->
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.1.4.0</FileVersion>
+    <Version>1.1.4</Version>
     <Description>Third-party runtime download restoration plugin that checks PCL method compatibility without rewriting the launcher executable.</Description>
   </PropertyGroup>
   <ItemGroup>

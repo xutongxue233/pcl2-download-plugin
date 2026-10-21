@@ -40,8 +40,8 @@ namespace PCL.DownloadRestore.Injector
             int exitCode = 1;
             try
             {
-                if (args.Length != 2 && args.Length != 4) throw new ArgumentException("用法：--install|--uninstall|--inspect <PCL.exe> [--report <新建的 JSON 文件>]");
-                if (args[0] != "--install" && args[0] != "--uninstall" && args[0] != "--inspect") throw new ArgumentException("未知操作：" + args[0]);
+                if (args.Length != 2 && args.Length != 4) throw new ArgumentException("用法：--install|--upgrade|--uninstall|--inspect <PCL.exe> [--report <新建的 JSON 文件>]");
+                if (args[0] != "--install" && args[0] != "--upgrade" && args[0] != "--uninstall" && args[0] != "--inspect") throw new ArgumentException("未知操作：" + args[0]);
                 if (args.Length == 4)
                 {
                     if (args[2] != "--report" || !string.Equals(Path.GetExtension(args[3]), ".json", StringComparison.OrdinalIgnoreCase))
@@ -56,7 +56,8 @@ namespace PCL.DownloadRestore.Injector
                 var service = new InstallationService(EmbeddedPayload.ReadFiles());
                 if (args[0] != "--inspect")
                 {
-                    OperationResult operation = args[0] == "--install" ? service.Install(args[1]) : service.Uninstall(args[1]);
+                    OperationResult operation = args[0] == "--install" ? service.Install(args[1]) :
+                        args[0] == "--upgrade" ? service.Upgrade(args[1]) : service.Uninstall(args[1]);
                     report.Success = operation.Success;
                     report.Message = operation.Message;
                     report.LauncherSha256 = operation.LauncherSha256;
@@ -65,6 +66,10 @@ namespace PCL.DownloadRestore.Injector
                 report.Status = inspection.Status;
                 report.CanInstall = inspection.CanInstall;
                 report.CanUninstall = inspection.CanUninstall;
+                report.InstalledVersion = inspection.InstalledVersion;
+                report.AvailableVersion = inspection.AvailableVersion;
+                report.CanUpgrade = inspection.CanUpgrade;
+                report.IsDisabled = inspection.IsDisabled;
                 report.LauncherSha256 = inspection.LauncherSha256 ?? report.LauncherSha256;
                 if (args[0] == "--inspect") { report.Success = true; report.Message = inspection.Message; }
                 exitCode = report.Success ? 0 : 1;
@@ -108,5 +113,9 @@ namespace PCL.DownloadRestore.Injector
         [DataMember] public string Status { get; set; }
         [DataMember] public bool CanInstall { get; set; }
         [DataMember] public bool CanUninstall { get; set; }
+        [DataMember] public string InstalledVersion { get; set; }
+        [DataMember] public string AvailableVersion { get; set; }
+        [DataMember] public bool CanUpgrade { get; set; }
+        [DataMember] public bool IsDisabled { get; set; }
     }
 }

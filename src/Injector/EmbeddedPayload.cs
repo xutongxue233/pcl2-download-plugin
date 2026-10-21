@@ -8,6 +8,8 @@ namespace PCL.DownloadRestore.Injector
     /// <summary>仅允许分发这些运行时文件；嵌入时不加载或执行文件。</summary>
     public static class EmbeddedPayload
     {
+        public static string PackageVersion => typeof(EmbeddedPayload).Assembly.GetName().Version.ToString(3);
+
         public static IDictionary<string, byte[]> ReadFiles()
         {
             var files = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);

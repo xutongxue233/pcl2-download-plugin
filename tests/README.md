@@ -2,6 +2,8 @@
 
 在 Windows、.NET Framework 4.8 环境中运行，使用 .NET SDK 10.0.301 或更高的 10.0 系列稳定版；不需要重编译 PCL，也不需要补齐 MeloongCore 源码。
 
+当前源码为 **1.1.4 开发版（未发布）**，新增插件版本识别与直接升级；公开的 v1.1.3 附件不包含这些功能。本页说明测试复现入口和覆盖范围，当前已执行结果见[注入器验证记录](../INJECTOR-VALIDATION.md)。实际数量、结果和版本以生成的报告为准。
+
 先在本项目目录执行：
 
 ```powershell
@@ -62,6 +64,38 @@
 独立命令行测试将注入器 EXE 单独复制到新目录，进程 PATH 指向空目录，再执行安装、检查和卸载，确认不需要旁边的 DLL、载荷目录或 PATH 中的 PowerShell。现有报告和插件安装元数据路径也经过拒绝写入测试。历史记录兼容用例直接写入内嵌载荷、启动配置、原配置备份和 schema 1 JSON，不调用当前安装器生成样本，也不运行已退役的 PowerShell 安装脚本。
 
 结果位于 `artifacts/injector-integration/results.json` 和 `results.txt`。各次运行的隔离目录会保留以便排查，原始 EXE 和用户游戏目录不受影响。
+
+### 1.1.4 升级回归
+
+默认运行 `InjectorIntegration/Run.ps1` 会执行安装检查和升级事务用例，其中使用独立构造的合成载荷（synthetic）与 schema 2 记录验证升级、回滚和版本保护。这些事务样本不会作为程序执行，也不冒充已发布的 v1.1.2 / v1.1.3；默认运行不包含正式历史发行包的载荷识别用例。
+
+若要同时验证正式旧版三 DLL 的识别与 schema 1 原地升级，请自行准备两个原始发行 ZIP，保持以下目录和文件名：
+
+```text
+D:\你的历史发行包目录\
+  v1.1.2\
+    PCL.DownloadRestore.Injector-v1.1.2-PCL2.99.0.0.zip
+  v1.1.3\
+    PCL.DownloadRestore.Injector-v1.1.3.zip
+```
+
+然后在仓库根目录运行：
+
+```powershell
+.\tests\InjectorIntegration\Run.ps1 -LegacyReleaseDirectory 'D:\你的历史发行包目录'
+```
+
+宿主仍默认使用前面准备的 `refs/Plain Craft Launcher 2.exe`，也可同时传入 `-HostExecutable`。历史包路径与名称由[测试实现](InjectorIntegration/Program.cs)确定；v1.1.2 文件名必须保留 `-PCL2.99.0.0` 后缀。脚本不会下载附件，会核对 ZIP 和其中注入器的固定校验值，再读取内嵌 DLL、独立构造 schema 1 安装；不执行旧版入口或安装器。传入目录后，报告中的 `PublishedLegacyCasesRequested` 应为 `true`。缺少或修改过的历史包会使相应用例失败，不能用当前构建重新压缩来替代。
+
+默认用例和可选正式历史包用例分别在隔离目录核对以下行为；不要只修改记录中的版本号来伪装正式历史版本：
+
+- 用已发布 v1.1.2 / v1.1.3 的完整三 DLL 和 schema 1 记录验证 `InstalledVersion`、内置的 `AvailableVersion=1.1.4` 及 `CanUpgrade`。三 DLL 哈希用于本工具载荷识别，与上面的 PCL 回归样本哈希用途不同。
+- 完整旧安装经 `--upgrade` 转为 schema 2，记录 `PackageVersion` 与 `UpdatedUtc`；首次 `InstalledUtc` 和 `.original-exe.config` 原始字节保持不变，升级后卸载仍恢复最初配置。
+- 禁用状态升级后仍保留；`--install` 继续幂等，不代替升级。更高版本不降级，同版本不同构建和未知旧自编译载荷不猜版本、不覆盖。
+- 缺文件、DLL 被修改、配置或备份冲突不会被自动修复。模拟升级中途失败后，核对三 DLL、原始安装记录及升级前当前配置全部回滚。
+- 用旧工具检查新 schema 2 安装，应拒绝未知记录格式，不覆盖新记录。用 1.1.4 的 CLI 独立进程检查、升级和卸载，核对退出状态与 JSON 结果。
+
+GUI 版本显示与“升级插件”按钮需要单独进行实际窗口验证；安装断言或 CLI 成功不等于界面、游戏运行或下载已验证。新增 CLI 与报告字段见[使用说明](../INJECTOR.md#命令行)。
 
 ## 最终 ZIP 核验
 

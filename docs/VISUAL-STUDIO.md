@@ -2,7 +2,7 @@
 
 打开仓库根目录的 **[PCL.DownloadRestore.sln](../PCL.DownloadRestore.sln)**。解决方案包含注入器、启动加载器和下载插件三个项目；编译时自动生成并嵌入插件，无需先运行脚本、下载预编译 DLL，也不需要官方 PCL 源码或 EXE。
 
-当前版本为 **v1.1.3**，允许用户自行确认来源后选择 `.exe` 尝试注入，不再限制固定宿主 SHA-256 和程序集版本。运行时仍检查 PCL 程序集名称与实际方法 / IL 结构，不保证未知版本兼容。旧版 v1.1.2 标签与附件保留原有固定限制。
+当前源码为 **1.1.4 开发版（未发布）**，新增已安装 / 内置插件版本显示和直接升级。公开 Release 仍为 v1.1.3，不包含此功能。源码沿用取消固定 PCL SHA-256 和程序集版本限制的行为，运行时仍检查实际方法 / IL 结构，不保证未知宿主版本兼容。
 
 ## 安装开发环境
 
@@ -16,14 +16,14 @@
 
 ## 打开、编译、启动
 
-1. 克隆当前仓库，或解压 `PCL.DownloadRestore.Source-v1.1.3.zip`。首次发布的 v1.1.2 源码附件不包含解决方案，请使用 v1.1.3 或更新的源码。
+1. 开发 1.1.4 请克隆当前仓库或使用从当前源码生成的源码 ZIP。公开的 `PCL.DownloadRestore.Source-v1.1.3.zip` 可以打开解决方案，但不含直接升级功能；v1.1.2 源码附件不包含解决方案。
 2. 在 Visual Studio 启动页选择 **“打开项目或解决方案”**，打开 `PCL.DownloadRestore.sln`。也可以使用 **文件 → 打开 → 项目/解决方案**。
 3. 等待项目加载和 NuGet 还原完成。
 4. 在解决方案资源管理器中，右键 **`PCL.DownloadRestore.Injector` → 设为启动项目**。
 5. 顶部配置选择 **Debug / Any CPU**。
 6. 按 **F5** 编译并调试注入器；不需要断点调试时按 **Ctrl+F5**。
 
-启动后应看到“PCL下载恢复工具”窗口。查看界面不需要选择 PCL；测试安装、卸载功能时，再选择自己确认来源的 PCL EXE。若目录中已安装 v1.1.2 插件，先卸载再安装 v1.1.3，重复注入不会自动升级旧 DLL。
+启动后应看到“PCL下载恢复工具”窗口。查看界面不需要选择 PCL；测试安装、升级或卸载功能时，再选择自己确认来源的 PCL EXE。1.1.4 会显示已安装版本与内置 1.1.4 版本，识别出完整的旧版 v1.1.2 / v1.1.3 插件时可直接“升级插件”；重复 `--install` 不自动升级。新 schema 2 记录不受旧工具支持，升级后应继续使用 1.1.4 管理该安装。
 
 正常编译会自动完成以下步骤：
 
@@ -42,7 +42,7 @@ Release 输出为 `src/Injector/bin/Release/net48/PCL.DownloadRestore.Injector.e
 | 界面布局 | `src/Injector/MainWindow.xaml` |
 | 界面事件与状态 | `src/Injector/MainWindow.xaml.cs` |
 | 配色、按钮、输入框样式 | `src/Injector/UI/PclStyles.xaml` |
-| 检测、安装和卸载 | `src/Injector/Installation/` |
+| 版本识别、安装、升级和卸载 | `src/Injector/Installation/` |
 | PCL 启动时加载插件 | `src/Bootstrap/` |
 | 恢复下载功能的运行时补丁 | `src/DownloadRestore/` |
 
@@ -57,7 +57,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Package-Inject
 
 第一条命令直接构建注入器项目及项目引用，核对内嵌 DLL，并准备 `artifacts/Injector/`；第二条生成 `artifacts/PCL.DownloadRestore.Injector.zip` 和 `artifacts/PCL.DownloadRestore.Injector-Source.zip`。这些命令不需要指定 PCL 路径。
 
-源码包排除 EXE、DLL、`bin/`、`obj/`、`refs/`、`artifacts/` 和运行日志，解压后可重新构建。完整流程见[构建、打包与发布](RELEASING.md)。本地打包不会自动创建 GitHub Release，已发布 v1.1.2 附件名称与行为保持不变。
+源码包排除 EXE、DLL、`bin/`、`obj/`、`refs/`、`artifacts/` 和运行日志，解压后可重新构建。完整流程见[构建、打包与发布](RELEASING.md)。本地构建 1.1.4 不会创建 GitHub Release 或改写 v1.1.3 的标签和附件；后者仍保留原有行为。
 
 ## 排查加载或构建问题
 

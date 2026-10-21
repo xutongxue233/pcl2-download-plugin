@@ -45,6 +45,7 @@
                                 <StackPanel Margin="0,16,0,0" MinHeight="43">
                                     <TextBlock x:Name="StatusTitle" Text="请选择 PCL 程序" />
                                     <TextBlock x:Name="StatusMessage" Text="安装一次，之后启动 PCL 自动尝试加载。" Foreground="{DynamicResource ColorBrushGray3}" FontSize="12" Margin="0,5,0,0" TextWrapping="Wrap" />
+                                    <TextBlock x:Name="PluginVersions" Foreground="{DynamicResource ColorBrushGray3}" FontSize="12" Margin="0,6,0,0" TextWrapping="Wrap" Visibility="Collapsed" AutomationProperties.Name="已安装与内置插件版本" />
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,17,0,0">
                                     <Button x:Name="InstallButton" Content="注入插件" Style="{StaticResource PclPrimaryButton}" Width="120" Height="35" Margin="0,0,12,0" IsEnabled="False" Click="InstallClick" />

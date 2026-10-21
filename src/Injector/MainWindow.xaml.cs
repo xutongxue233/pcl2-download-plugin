@@ -21,6 +21,7 @@ namespace PCL.DownloadRestore.Injector
         private bool busy, checking, closed, initialized, readingLogs;
         private string lastInspectionLog;
         private int generation;
+        private enum OperationKind { Install, Upgrade, Uninstall }
 
         internal MainWindow(string launcherPath)
         {
@@ -107,11 +108,12 @@ namespace PCL.DownloadRestore.Injector
                 if (request != generation || closed) return;
                 inspection = result;
                 ShowInspection();
-                string inspected = path + Environment.NewLine + result.Status + Environment.NewLine + result.Message;
+                string versions = DescribeVersions(result);
+                string inspected = path + Environment.NewLine + result.Status + Environment.NewLine + versions + Environment.NewLine + result.Message;
                 if (inspected != lastInspectionLog)
                 {
                     lastInspectionLog = inspected;
-                    AppendLog("检测程序：" + path + Environment.NewLine + result.Message);
+                    AppendLog("检测程序：" + path + Environment.NewLine + versions + Environment.NewLine + result.Message);
                 }
             }
             catch (Exception ex) { if (request == generation && !closed) { ShowError(ex.Message); AppendLog(ex.Message); } }
@@ -124,44 +126,68 @@ namespace PCL.DownloadRestore.Injector
                 case "Ready": SetStatus("可以尝试注入", "请确认 PCL 来源正确，安装后可在启动日志中查看兼容结果。", "ColorBrush2"); break;
                 case "Installed": SetStatus("已注入，无需重复操作", "照常启动 PCL，在日志中查看插件加载结果。", "ColorBrush2"); break;
                 case "Disabled": SetStatus("插件已停用", "点击“启用插件”可重新启用。", "ColorBrushGray3"); break;
+                case "UpgradeAvailable": SetStatus("插件可以升级", inspection.Message, "ColorBrush2"); break;
+                case "NewerVersion": SetStatus("已安装较新版本", inspection.Message, "ColorBrush1"); break;
+                case "DifferentBuild": SetStatus("同版本的构建不同", inspection.Message, "ColorBrush1"); break;
+                case "UnknownVersion": SetStatus("无法识别已安装版本", inspection.Message, "ColorBrush1"); break;
                 case "Running": SetStatus("请先退出 PCL", "退出后会自动刷新状态。", "ColorBrush1"); break;
                 case "Incomplete": SetStatus("插件文件不完整", "请先卸载插件，再重新注入。", "ColorBrushRedDark"); break;
                 default: SetStatus("暂时无法操作", inspection.Message, "ColorBrushRedDark"); break;
             }
         }
-        private async void InstallClick(object sender, RoutedEventArgs e) => await OperateAsync(true);
-        private async void UninstallClick(object sender, RoutedEventArgs e) => await OperateAsync(false);
-        private async Task OperateAsync(bool install)
+        private async void InstallClick(object sender, RoutedEventArgs e) =>
+            await OperateAsync(inspection?.CanUpgrade == true ? OperationKind.Upgrade : OperationKind.Install);
+        private async void UninstallClick(object sender, RoutedEventArgs e) => await OperateAsync(OperationKind.Uninstall);
+        private async Task OperateAsync(OperationKind operation)
         {
             if (busy || checking) return;
             string path = LauncherPath.Text.Trim().Trim('"');
+            bool enabling = operation == OperationKind.Install && inspection?.IsDisabled == true;
+            string action = operation == OperationKind.Upgrade ? "升级插件" : operation == OperationKind.Uninstall ? "卸载插件" : enabling ? "启用插件" : "注入插件";
+            string progress = operation == OperationKind.Upgrade ? "正在升级…" : operation == OperationKind.Uninstall ? "正在卸载…" : enabling ? "正在启用…" : "正在注入…";
             busy = true;
             generation++;
             pathTimer.Stop();
             UpdateButtons();
-            SetStatus(install ? "正在注入…" : "正在卸载…", "请稍候。", "ColorBrush2");
+            SetStatus(progress, "请稍候。", "ColorBrush2");
+            AppendLog("开始" + action + "：" + DescribeVersions(inspection));
             try
             {
-                await Task.Run(() => install ? service.Install(path) : service.Uninstall(path));
+                var result = await Task.Run(() => operation == OperationKind.Upgrade ? service.Upgrade(path) :
+                    operation == OperationKind.Uninstall ? service.Uninstall(path) : service.Install(path));
                 inspection = await Task.Run(() => service.Inspect(path));
                 ShowInspection();
-                if (!install && inspection.Status == "Ready") SetStatus("插件已卸载", "已恢复原配置，游戏文件保留。", "ColorBrush2");
+                if (!result.Success) ShowError(result.Message);
+                else if (operation == OperationKind.Uninstall && inspection.Status == "Ready") SetStatus("插件已卸载", "已恢复原配置，游戏文件保留。", "ColorBrush2");
+                AppendLog(action + (result.Success ? "完成：" : "未完成：") + result.Message + Environment.NewLine + DescribeVersions(inspection));
             }
             catch (Exception ex)
             {
                 try { inspection = await Task.Run(() => service.Inspect(path)); } catch { inspection = null; }
                 ShowError(ex.Message);
-                AppendLog("操作未完成：" + ex.Message);
+                AppendLog(action + "未完成：" + ex.Message + Environment.NewLine + DescribeVersions(inspection));
             }
             finally { busy = false; UpdateButtons(); await UpdateLogsAsync(); }
         }
         private void UpdateButtons()
         {
             BrowseButton.IsEnabled = LauncherPath.IsEnabled = !busy;
-            InstallButton.IsEnabled = !busy && !checking && inspection?.CanInstall == true;
-            InstallButton.Content = inspection?.Status == "Installed" ? "已注入" : inspection?.Status == "Disabled" ? "启用插件" : "注入插件";
+            InstallButton.IsEnabled = !busy && !checking && (inspection?.CanInstall == true || inspection?.CanUpgrade == true);
+            InstallButton.Content = inspection?.CanUpgrade == true ? "升级插件" :
+                inspection?.IsDisabled == true && inspection.CanInstall ? "启用插件" :
+                inspection?.Status == "Installed" || inspection?.Status == "NewerVersion" || inspection?.Status == "DifferentBuild" || inspection?.Status == "UnknownVersion" ? "已注入" : "注入插件";
             UninstallButton.IsEnabled = !busy && !checking && inspection?.CanUninstall == true;
+            PluginVersions.Text = DescribeVersions(inspection);
+            PluginVersions.Visibility = inspection == null ? Visibility.Collapsed : Visibility.Visible;
             Cursor = busy ? Cursors.Wait : null;
+        }
+        private static string DescribeVersions(InspectionResult result)
+        {
+            if (result == null) return "插件版本尚未确认";
+            string installed = !string.IsNullOrWhiteSpace(result.InstalledVersion) ? "已安装 v" + result.InstalledVersion :
+                result.Status == "Ready" ? "尚未安装" : result.Status == "UnknownVersion" ? "已安装版本未知" : "安装版本待确认";
+            string available = !string.IsNullOrWhiteSpace(result.AvailableVersion) ? "内置 v" + result.AvailableVersion : "内置版本未知";
+            return installed + " · " + available;
         }
         private void SetStatus(string title, string message, string color)
         {

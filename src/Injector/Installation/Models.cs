@@ -10,6 +10,10 @@ namespace PCL.DownloadRestore.Injector.Installation
         public string LauncherSha256 { get; internal set; }
         public bool CanInstall { get; internal set; }
         public bool CanUninstall { get; internal set; }
+        public bool CanUpgrade { get; internal set; }
+        public string InstalledVersion { get; internal set; }
+        public string AvailableVersion { get; internal set; }
+        public bool IsDisabled { get; internal set; }
     }
 
     public sealed class OperationResult
@@ -19,7 +23,7 @@ namespace PCL.DownloadRestore.Injector.Installation
         public string LauncherSha256 { get; internal set; }
     }
 
-    // 名称与类型刻意保持与原 PowerShell schema 1 安装记录一致。
+    // 保留 schema 1 的字段；schema 2 新增插件包版本，旧工具会拒绝未知格式而非覆盖。
     [DataContract]
     internal sealed class InstallState
     {
@@ -32,6 +36,8 @@ namespace PCL.DownloadRestore.Injector.Installation
         [DataMember(Order = 6, IsRequired = true)] public string InstalledConfigSha256 { get; set; }
         [DataMember(Order = 7, IsRequired = true)] public string BootstrapSha256 { get; set; }
         [DataMember(Order = 8, IsRequired = true)] public List<PluginFileState> PluginFiles { get; set; }
+        [DataMember(Order = 9, EmitDefaultValue = false)] public string PackageVersion { get; set; }
+        [DataMember(Order = 10, EmitDefaultValue = false)] public string UpdatedUtc { get; set; }
     }
 
     [DataContract]
