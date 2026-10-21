@@ -1,0 +1,10 @@
+{
+  "repository": "https://github.com/Meloong-Git/PCL",
+  "tag": "2.99.0.0",
+  "file": "最新正式版.zip",
+  "gitBlobSha1": "52843e0ba1c97a888630be8326fbc5a132157ccc",
+  "verification": "Local ZIP git blob hash equals the GitHub Contents API result for the official 2.99.0.0 tag.",
+  "executableVersion": "2.99.0.0",
+  "executableSha256": "6B6E1260CB5A1D6A303855F1C60CAB3D0BC1AEBBA7E40A964180188B271E7386",
+  "api": "https://api.github.com/repos/Meloong-Git/PCL/contents/%E6%9C%80%E6%96%B0%E6%AD%A3%E5%BC%8F%E7%89%88.zip?ref=2.99.0.0"
+}

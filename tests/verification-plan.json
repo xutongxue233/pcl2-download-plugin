@@ -1,0 +1,25 @@
+{
+  "targetVersion": "2.99.0.0",
+  "targetSha256": "6B6E1260CB5A1D6A303855F1C60CAB3D0BC1AEBBA7E40A964180188B271E7386",
+  "distribution": "plugin-only; official executable excluded",
+  "checks": [
+    "Build bootstrap and restoration plugin without compiling PCL",
+    "Reject unsupported executable without changing it",
+    "Install, repeat install, uninstall preserve executable SHA-256",
+    "Preserve existing configuration and unrelated files",
+    "Refuse conflicting application domain manager or edited configuration",
+    "Original official executable shows download restriction",
+    "Normal executable startup automatically loads installed plugin",
+    "Minecraft manifest and version selection load successfully",
+    "Complete a Minecraft installation into isolated test directory",
+    "Modpack installation dispatch and instance modification restored",
+    "Close and restart executable; plugin remains effective",
+    "Uninstall and restart; original restriction returns",
+    "Release archive contains no PCL executable or extracted PCL dependency assemblies"
+  ],
+  "baseline": {
+    "status": "passed",
+    "method": "Windows GUI observation of the unmodified official EXE",
+    "observation": "Original game page displays the MC download restriction message"
+  }
+}

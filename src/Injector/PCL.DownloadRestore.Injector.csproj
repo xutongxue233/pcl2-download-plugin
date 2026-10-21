@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <OutputType>WinExe</OutputType>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>PCL.DownloadRestore.Injector</AssemblyName>
+    <RootNamespace>PCL.DownloadRestore.Injector</RootNamespace>
+    <Version>1.1.2</Version>
+    <LangVersion>latest</LangVersion>
+    <Deterministic>true</Deterministic>
+    <Prefer32Bit>false</Prefer32Bit>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Description>Third-party application-local plugin injector for the unchanged official PCL 2.99.0.0.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System.Runtime.Serialization" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <EmbeddedResource Include="..\..\artifacts\payload\PCL.PluginBootstrap.dll" LogicalName="payload.PCL.PluginBootstrap.dll" />
+    <EmbeddedResource Include="..\..\artifacts\payload\PCL\Plugins\DownloadRestore\PCL.DownloadRestore.dll" LogicalName="payload.PCL.DownloadRestore.dll" />
+    <EmbeddedResource Include="..\..\artifacts\payload\PCL\Plugins\DownloadRestore\0Harmony.dll" LogicalName="payload.0Harmony.dll" />
+    <Resource Include="UI\Resources\Font.ttf" />
+  </ItemGroup>
+</Project>
